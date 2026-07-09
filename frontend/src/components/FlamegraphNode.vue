@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 
 const props = defineProps<{
     node: any;
     totalDur: number;
     depth: number;
 }>();
+
+const setZoomedNode = inject('setZoomedNode') as ((node: any) => void) | undefined;
+
+const onClick = (e: MouseEvent) => {
+    e.stopPropagation(); // don't zoom out or up to parent
+    if (setZoomedNode) {
+        setZoomedNode(props.node);
+    }
+};
 
 const widthPercent = computed(() => {
     if (props.totalDur === 0) return 0;
@@ -49,6 +58,7 @@ const unrecordedPercent = computed(() => {
       class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs text-white border-r border-b border-gray-900 cursor-pointer transition-colors"
       :style="{ backgroundColor: bgColor }"
       :title="`${node.name}\nTotal: ${(node.dur / 1000).toFixed(3)} ms`"
+      @click="onClick"
       onmouseover="this.style.filter='brightness(1.2)'"
       onmouseout="this.style.filter='brightness(1)'"
     >
