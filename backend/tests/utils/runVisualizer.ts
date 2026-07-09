@@ -21,7 +21,7 @@ export function teardownTestEnvironment(tmpDir: string) {
     }
 }
 
-export function runVisualizer(code: string, tmpDir: string): any {
+export function runVisualizer(code: string, tmpDir: string, std: string = 'c++17'): any {
     const testId = Math.random().toString(36).substring(7);
     const cppFile = path.join(tmpDir, `test_${testId}.cpp`);
     const traceFile = path.join(tmpDir, `trace_custom.json`);
@@ -35,7 +35,7 @@ export function runVisualizer(code: string, tmpDir: string): any {
     
     // Run Visualizer.exe (the trace is generated in the current working directory of the process)
     try {
-        execSync(`"${PLUGIN_BIN}" "${cppFile}" -- -std=c++17`, { cwd: tmpDir });
+        execSync(`"${PLUGIN_BIN}" "${cppFile}" -- -std=${std}`, { cwd: tmpDir });
     } catch (e: any) {
         console.error("Execution failed:", e.stdout?.toString(), e.stderr?.toString());
         // Visualizer might return non-zero if there are compiler errors, but still generate trace
