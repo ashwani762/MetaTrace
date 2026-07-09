@@ -4,6 +4,7 @@
   "description": "Visualizer for C++ Templates",
   "main": "build.js",
   "scripts": {
+    "install:all": "npm install --prefix frontend && npm install --prefix backend",
     "build": "node build.js",
     "prepare": "node scripts/generate_version.js dev"
   },

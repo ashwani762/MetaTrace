@@ -9,7 +9,7 @@ RELEASE_DIR="$DIR/release"
 echo "======================================="
 echo "Checking Linux build dependencies..."
 echo "======================================="
-if ! command -v cmake &> /dev/null || ! dpkg -s llvm-dev &> /dev/null || ! dpkg -s libclang-dev &> /dev/null; then
+if ! command -v cmake &> /dev/null || ! dpkg -l | grep -qE "^ii  llvm(-[0-9]+)?-dev" || ! dpkg -l | grep -qE "^ii  libclang(-[0-9]+)?-dev"; then
     echo "Missing dependencies. Attempting to install via apt-get..."
     sudo apt-get update
     sudo apt-get install -y cmake llvm-dev libclang-dev build-essential

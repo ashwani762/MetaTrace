@@ -48,3 +48,8 @@ backend/public/
 # Auto-generated version files
 backend/plugin/version.h
 backend/src/version.ts
+
+# Compiled Clang Visualizer binary
+backend/plugin/Visualizer
+backend/CppTemplateVisualizer
+backend/plugin/build/
