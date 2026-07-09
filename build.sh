@@ -61,6 +61,7 @@ echo "======================================="
 echo "5. Creating Release Directory..."
 echo "======================================="
 mkdir -p "$RELEASE_DIR"
+rm -f "$RELEASE_DIR/MetaTrace"
 cp "$BACKEND_DIR/MetaTrace" "$RELEASE_DIR/"
 
 echo "======================================="
