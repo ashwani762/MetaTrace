@@ -1,5 +1,6 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/TemplateBase.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
@@ -57,7 +58,26 @@ public:
         std::string detail = "Unknown";
         if (Inst.Entity) {
             if (auto *ND = dyn_cast<NamedDecl>(Inst.Entity)) {
-                detail = ND->getQualifiedNameAsString();
+                std::string nameStr;
+                llvm::raw_string_ostream OS(nameStr);
+                PrintingPolicy Policy(TheSema.getLangOpts());
+                Policy.SuppressScope = false;
+                
+                if (auto *FD = dyn_cast<FunctionDecl>(ND)) {
+                    detail = FD->getQualifiedNameAsString();
+                    if (const TemplateArgumentList *Args = FD->getTemplateSpecializationArgs()) {
+                        std::string argStr;
+                        llvm::raw_string_ostream ArgOS(argStr);
+                        printTemplateArgumentList(ArgOS, Args->asArray(), Policy);
+                        detail += argStr;
+                    }
+                } else if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(ND)) {
+                    CTSD->printQualifiedName(OS, Policy);
+                    detail = nameStr;
+                } else {
+                    ND->printQualifiedName(OS, Policy);
+                    detail = nameStr;
+                }
             }
         }
         
