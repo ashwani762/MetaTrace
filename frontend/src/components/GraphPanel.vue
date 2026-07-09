@@ -1,20 +1,11 @@
 <script setup lang="ts">
 import Graph from './Graph.vue';
-import { computed } from 'vue';
+import StepControls from './StepControls.vue';
 import { 
   traceSteps, 
   currentStepIndex, 
-  logicalStepIndex,
-  treeData,
-  logicalMaxSteps,
-  setStepIndex,
-  handleStep
+  treeData
 } from '../store';
-
-const progress = computed({
-  get: () => logicalStepIndex.value,
-  set: (val: number) => setStepIndex(val)
-});
 </script>
 
 <template>
@@ -27,32 +18,7 @@ const progress = computed({
     
     <!-- Floating Scrubber Overlay (smaller and no subtitle text) -->
     <div v-if="traceSteps.length > 0" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-3/4 max-w-sm flex items-center justify-between bg-gray-900/85 backdrop-blur border border-gray-700/60 rounded-full py-1.5 px-4 shadow-xl z-20 space-x-3">
-      
-      <button 
-        @click="handleStep('back')" 
-        :disabled="logicalStepIndex < 0"
-        class="p-1 rounded-full hover:bg-gray-700/80 disabled:opacity-30 disabled:hover:bg-transparent text-gray-200 transition-colors"
-        title="Step Back"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
-      </button>
-
-      <input 
-        type="range" 
-        min="-1" 
-        :max="logicalMaxSteps - 1" 
-        v-model.number="progress"
-        class="flex-1 h-1.5 bg-gray-700/80 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:bg-gray-600 transition-colors"
-      />
-
-      <button 
-        @click="handleStep('in')" 
-        :disabled="logicalStepIndex >= logicalMaxSteps - 1"
-        class="p-1 rounded-full hover:bg-gray-700/80 disabled:opacity-30 disabled:hover:bg-transparent text-emerald-400 transition-colors"
-        title="Step In"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>
-      </button>
+      <StepControls :compact="true" />
     </div>
   </div>
 </template>
