@@ -71,7 +71,8 @@ onMounted(() => {
   });
 
   // Setup custom Language Server Client
-  const url = 'ws://localhost:3001/lsp';
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${window.location.host}/lsp`;
   lspClient = new SimpleLspClient(url, editor);
 
   window.addEventListener('editor-highlight', handleCustomHighlight);
