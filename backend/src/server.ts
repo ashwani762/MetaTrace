@@ -17,7 +17,7 @@ for (let i = 2; i < process.argv.length; i++) {
     const arg = process.argv[i];
     if (arg === '--help' || arg === '-h') {
         console.log(`
-Usage: CppTemplateVisualizer.exe [options]
+Usage: MetaTrace.exe [options]
 
 Options:
   --port, -p    Port to listen on (default: 80)
@@ -70,7 +70,7 @@ function execute(cmd: string, cwd?: string, signal?: AbortSignal): Promise<{stdo
 const isPkg = typeof (process as any).pkg !== 'undefined';
 // For serving static files from within pkg snapshot or local dir
 const staticDir = path.join(__dirname, '..', 'public');
-const appDataDir = path.join(os.tmpdir(), 'CppTemplateVisualizer');
+const appDataDir = path.join(os.tmpdir(), 'MetaTrace');
 if (!fsSync.existsSync(appDataDir)) {
     fsSync.mkdirSync(appDataDir, { recursive: true });
 }
@@ -186,7 +186,13 @@ const server = app.listen(port, host, () => {
   const url = `http://${host === '0.0.0.0' ? 'localhost' : host}${port === 80 ? '' : ':' + port}`;
   const banner = `
 =============================================================
-  🚀 C++ Template Visualizer is running!
+  __  __      _      _                    
+ |  \\/  | ___| |_ __| | _ __ __ _  ___ ___ 
+ | |\\/| |/ _ \\ __/ _\` || '__/ _\` |/ __/ _ \\
+ | |  | |  __/ || (_| || | | (_| | (_|  __/
+ |_|  |_|\\___|\\__\\__,_||_|  \\__,_|\\___\\___|
+ 
+  🚀 MetaTrace is running!
 =============================================================
   Network UI:   ${url}
   

@@ -1,5 +1,5 @@
 {
-  "name": "cpp-template-visualizer",
+  "name": "meta-trace",
   "version": "1.0.0",
   "description": "Visualizer for C++ Templates",
   "main": "build.js",

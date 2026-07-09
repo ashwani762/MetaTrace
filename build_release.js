@@ -42,11 +42,11 @@ console.log('3. Packaging Backend to Binary using pkg...');
 console.log('=======================================');
 // Install pkg locally in the backend folder
 execSync('npm install pkg --no-save', { cwd: backendDir, stdio: 'inherit' });
-// Run pkg to compile server.js into CppTemplateVisualizer.exe using package.json config
-execSync('npx pkg . --target node18-win-x64 --output CppTemplateVisualizer.exe', { cwd: backendDir, stdio: 'inherit' });
+// Run pkg to compile server.js into MetaTrace.exe using package.json config
+execSync('npx pkg . --target node18-win-x64 --output MetaTrace.exe', { cwd: backendDir, stdio: 'inherit' });
 
 console.log('Adding logo to executable...');
-execSync('npx resedit-cli --in CppTemplateVisualizer.exe --out CppTemplateVisualizer.exe --icon 1,../logo.ico', { cwd: backendDir, stdio: 'inherit' });
+execSync('npx resedit-cli --in MetaTrace.exe --out MetaTrace.exe --icon 1,../logo.ico', { cwd: backendDir, stdio: 'inherit' });
 
 console.log('\n=======================================');
 console.log('4. Creating Release Directory...');
@@ -56,8 +56,8 @@ if (!fs.existsSync(releaseDir)) {
 }
 
 console.log('Copying artifacts to release folder...');
-// Copy CppTemplateVisualizer binary
-fs.copyFileSync(path.join(backendDir, 'CppTemplateVisualizer.exe'), path.join(releaseDir, 'CppTemplateVisualizer.exe'));
+// Copy MetaTrace binary
+fs.copyFileSync(path.join(backendDir, 'MetaTrace.exe'), path.join(releaseDir, 'MetaTrace.exe'));
 
 console.log('\n=======================================');
 console.log('SUCCESS! Release is ready in: ' + releaseDir);

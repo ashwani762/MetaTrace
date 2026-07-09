@@ -25,7 +25,7 @@ export function setupLSP(server: http.Server) {
             }
         };
 
-        const appDataDir = path.join(os.tmpdir(), 'CppTemplateVisualizer');
+        const appDataDir = path.join(os.tmpdir(), 'MetaTrace');
         const pluginCacheDir = path.join(appDataDir, 'plugin');
 
         let messageQueue: string[] = [];
