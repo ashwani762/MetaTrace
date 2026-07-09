@@ -15,7 +15,6 @@ export function setupLSP(server: http.Server) {
     const wss = new WebSocketServer({ server, path: '/lsp' });
 
     wss.on('connection', async (ws: WebSocket) => {
-        console.log('Client connected to LSP');
         
         // Helper to send custom progress notifications to the frontend
         const sendProgress = (msg: string) => {
@@ -104,7 +103,6 @@ export function setupLSP(server: http.Server) {
         });
 
         ws.on('close', () => {
-            console.log('Client disconnected from LSP');
             clangd.kill();
         });
 
