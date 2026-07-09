@@ -16,8 +16,15 @@ console.log('\n=======================================');
 console.log('1. Building C++ Visualizer Plugin...');
 console.log('=======================================');
 const pluginDir = path.join(backendDir, 'plugin');
-// Build Visualizer using build.bat which sets up MSVC env and runs cmake + ninja
-execSync('build.bat', { cwd: pluginDir, stdio: 'inherit' });
+try {
+    // Build Visualizer assuming CMake is already configured by the user
+    execSync('cmake --build . --config Release', { cwd: pluginDir, stdio: 'inherit' });
+} catch (e) {
+    console.error('\n[!] Failed to build the C++ Visualizer Plugin.');
+    console.error('[!] Ensure you have configured CMake with your LLVM_PATH before running npm run build.');
+    console.error('[!] See backend/plugin/README.md for instructions.\n');
+    process.exit(1);
+}
 
 console.log('\n=======================================');
 console.log('2. Compiling Frontend...');

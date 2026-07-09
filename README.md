@@ -45,13 +45,9 @@ npm run install:all
 
 ### 3. Build the LLVM Clang Plugin (Visualizer)
 MetaTrace ships with a custom C++ compiler frontend built against LLVM. 
-```bash
-cd backend/plugin
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
-```
+
+Because developer environments differ, you must configure CMake and build the plugin yourself before running the full build script.
+Please see the **[Plugin Build Instructions](backend/plugin/README.md)** for details on how to set up your `LLVM_PATH` and compile the plugin.
 
 ### 4. Run the Dev Server
 To run the app locally with hot-reloading for the frontend UI:
