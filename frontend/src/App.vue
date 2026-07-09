@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
     <!-- Top Nav -->
     <header class="h-14 border-b border-gray-800 bg-gray-900 flex items-center justify-between px-4 shrink-0 relative">
       <div class="flex items-center space-x-4">
-        <div class="flex flex-col min-w-[240px]">
+        <div class="flex flex-col">
           <h1 class="font-bold text-lg tracking-wide text-gray-100 flex items-center leading-none">
             <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
             MetaTrace
