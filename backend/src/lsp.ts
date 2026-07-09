@@ -20,14 +20,27 @@ export function setupLSP(server: http.Server) {
                 params: { message: msg }
             };
             const msgStr = JSON.stringify(notif);
-            const header = `Content-Length: ${Buffer.byteLength(msgStr, 'utf8')}\r\n\r\n`;
             if (ws.readyState === ws.OPEN) {
-                ws.send(header + msgStr);
+                ws.send(msgStr);
             }
         };
 
         const appDataDir = path.join(os.tmpdir(), 'CppTemplateVisualizer');
         const pluginCacheDir = path.join(appDataDir, 'plugin');
+
+        let messageQueue: string[] = [];
+        let isClangdReady = false;
+        let clangd: any = null;
+
+        ws.on('message', (message: string) => {
+            const msgStr = message.toString();
+            const header = `Content-Length: ${Buffer.byteLength(msgStr, 'utf8')}\r\n\r\n`;
+            if (isClangdReady && clangd) {
+                clangd.stdin.write(header + msgStr);
+            } else {
+                messageQueue.push(header + msgStr);
+            }
+        });
 
         let clangdPath: string;
         try {
@@ -39,16 +52,16 @@ export function setupLSP(server: http.Server) {
             return;
         }
 
-        const clangd = spawn(clangdPath, [
+        clangd = spawn(clangdPath, [
             '--log=error',
             '--background-index'
         ]);
 
-        ws.on('message', (message: string) => {
-            const msgStr = message.toString();
-            const header = `Content-Length: ${Buffer.byteLength(msgStr, 'utf8')}\r\n\r\n`;
-            clangd.stdin.write(header + msgStr);
-        });
+        isClangdReady = true;
+        for (const queuedMsg of messageQueue) {
+            clangd.stdin.write(queuedMsg);
+        }
+        messageQueue = [];
 
         let buffer = Buffer.alloc(0);
 

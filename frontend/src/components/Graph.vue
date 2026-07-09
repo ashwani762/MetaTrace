@@ -9,7 +9,29 @@ import '@vue-flow/controls/dist/style.css';
 import dagre from 'dagre';
 import { selectedNodeId } from '../store';
 
+const THEME = {
+    selected: { bg: '#4c1d95', border: '#a78bfa' }, // Purple
+    failed: { bg: '#450a0a', border: '#ef4444' }, // Red
+    aliasCurrent: { bg: '#9a3412', border: '#fb923c' }, // Orange-800
+    aliasActive: { bg: '#431407', border: '#f97316' }, // Orange-950
+    aliasFinished: { bg: '#7c2d12', border: '#ea580c' }, // Orange-900
+    aliasDefault: { bg: '#431407', border: '#9a3412' },
+    normalCurrent: { bg: '#1e3a8a', border: '#60a5fa' }, // Blue-900
+    normalActive: { bg: '#172554', border: '#3b82f6' }, // Blue-950
+    normalFinished: { bg: '#064e3b', border: '#10b981' }, // Emerald-900
+    normalDefault: { bg: '#1f2937', border: '#374151' } // Gray-800
+};
 
+const LEGEND_ITEMS = [
+    { label: 'Selected Node', colors: THEME.selected },
+    { label: 'Error / SFINAE Failure', colors: THEME.failed },
+    { label: 'Template (Active)', colors: THEME.normalCurrent },
+    { label: 'Template (In Progress)', colors: THEME.normalActive },
+    { label: 'Template (Completed)', colors: THEME.normalFinished },
+    { label: 'Type Alias (Active)', colors: THEME.aliasCurrent },
+    { label: 'Type Alias (In Progress)', colors: THEME.aliasActive },
+    { label: 'Type Alias (Completed)', colors: THEME.aliasFinished }
+];
 const props = defineProps<{
     steps: any[],
     currentIndex: number,
@@ -466,18 +488,18 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
 
         const isFinished = finishedIds.has(nodeData.id);
 
-        let bgColor = '#1f2937';
-        let borderColor = '#374151';
+        let bgColor = THEME.normalDefault.bg;
+        let borderColor = THEME.normalDefault.border;
         let shadow = 'none';
         let borderStyle = 'solid';
 
         if (isSelected) {
-            bgColor = '#4c1d95';
-            borderColor = '#a78bfa';
+            bgColor = THEME.selected.bg;
+            borderColor = THEME.selected.border;
             shadow = '0 0 15px rgba(124, 58, 237, 0.5)';
         } else if (nodeData.failed) {
-            bgColor = '#450a0a'; // Red-950
-            borderColor = '#ef4444'; // Red-500
+            bgColor = THEME.failed.bg;
+            borderColor = THEME.failed.border;
             borderStyle = 'dashed';
             shadow = '0 0 10px rgba(239, 68, 68, 0.4)';
             labelText = '❌ ' + labelText;
@@ -485,29 +507,29 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
             // Orange theme for aliases
             labelText = '🏷️ ' + labelText;
             if (isCurrent) {
-                bgColor = '#9a3412'; // Orange-800
-                borderColor = '#fb923c'; // Orange-400
+                bgColor = THEME.aliasCurrent.bg;
+                borderColor = THEME.aliasCurrent.border;
                 shadow = '0 0 15px rgba(251, 146, 60, 0.5)';
             } else if (isActive) {
-                bgColor = '#431407'; // Orange-950
-                borderColor = '#f97316'; // Orange-500
+                bgColor = THEME.aliasActive.bg;
+                borderColor = THEME.aliasActive.border;
             } else if (isFinished) {
-                bgColor = '#7c2d12'; // Orange-900
-                borderColor = '#ea580c'; // Orange-600
+                bgColor = THEME.aliasFinished.bg;
+                borderColor = THEME.aliasFinished.border;
             } else {
-                bgColor = '#431407';
-                borderColor = '#9a3412';
+                bgColor = THEME.aliasDefault.bg;
+                borderColor = THEME.aliasDefault.border;
             }
         } else if (isCurrent) {
-            bgColor = '#1e3a8a';
-            borderColor = '#60a5fa';
+            bgColor = THEME.normalCurrent.bg;
+            borderColor = THEME.normalCurrent.border;
             shadow = '0 0 15px rgba(59, 130, 246, 0.5)';
         } else if (isActive) {
-            bgColor = '#1f2937';
-            borderColor = '#3b82f6';
+            bgColor = THEME.normalActive.bg;
+            borderColor = THEME.normalActive.border;
         } else if (isFinished) {
-            bgColor = '#064e3b'; // Emerald-900
-            borderColor = '#10b981'; // Emerald-500
+            bgColor = THEME.normalFinished.bg;
+            borderColor = THEME.normalFinished.border;
         }
 
         currentNodes.push({
@@ -615,15 +637,10 @@ watch(() => props.currentIndex, () => {
     <div class="absolute bottom-4 right-4 z-10 bg-gray-900/90 backdrop-blur-sm border border-gray-700 p-3 rounded-lg shadow-xl text-xs font-medium text-gray-300">
       <div class="mb-2 text-gray-400 font-semibold border-b border-gray-700 pb-1">Legend</div>
       <div class="grid grid-cols-2 gap-x-4 gap-y-2">
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #4c1d95; border-color: #a78bfa;"></div>Class Template</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #7c2d12; border-color: #ea580c;"></div>Implicit Inst.</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #9a3412; border-color: #fb923c;"></div>Explicit Spec.</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #431407; border-color: #f97316;"></div>Partial Spec.</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #1e3a8a; border-color: #60a5fa;"></div>Function/Method</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #1f2937; border-color: #10b981;"></div>Var Template</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #1f2937; border-color: #f43f5e;"></div>Type Alias</div>
-        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #064e3b; border-color: #34d399;"></div>Concept</div>
-        <div class="flex items-center col-span-2"><div class="w-3 h-3 rounded mr-2 border" style="background: #450a0a; border-color: #ef4444;"></div>Error / SFINAE Failure</div>
+        <div v-for="item in LEGEND_ITEMS" :key="item.label" class="flex items-center">
+            <div class="w-3 h-3 rounded mr-2 border" :style="{ background: item.colors.bg, borderColor: item.colors.border }"></div>
+            {{ item.label }}
+        </div>
       </div>
     </div>
 
