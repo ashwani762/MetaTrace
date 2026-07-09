@@ -88,9 +88,9 @@ const totalCompileTime = computed(() => {
       </div>
       
       <!-- Graph Container -->
-      <div class="flex-1 overflow-auto bg-[#1e1e1e] border border-gray-800 rounded relative">
+      <div class="flex-1 overflow-auto bg-[#1e1e1e] border border-gray-800 rounded flex flex-col">
         <div 
-          class="flex flex-row w-full min-w-max min-h-full absolute inset-0"
+          class="flex flex-row w-full min-w-max flex-1"
           :class="isBottomUp ? 'items-end' : 'items-start'"
         >
           <FlamegraphNode 
