@@ -21,7 +21,7 @@
 #include <fstream>
 #include "version.h"
 #include <chrono>
-#include "clang/Basic/Diagnostic.h"
+
 
 using namespace clang;
 using namespace clang::tooling;
@@ -257,49 +257,8 @@ public:
     }
 };
 
-class ErrorTrappingDiagConsumer : public DiagnosticConsumer {
-    DiagnosticConsumer *Original;
-public:
-    ErrorTrappingDiagConsumer(DiagnosticConsumer *Original) : Original(Original) {}
-    
-    void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel, const Diagnostic &Info) override {
-        if (Original) Original->HandleDiagnostic(DiagLevel, Info);
-        
-        llvm::SmallString<100> OutStr;
-        Info.FormatDiagnostic(OutStr);
-        llvm::errs() << "[Diag] Level " << (int)DiagLevel << ": " << OutStr.c_str() << "\n";
-
-        if (DiagLevel >= DiagnosticsEngine::Note) {
-            if (!g_activeNodes.empty()) {
-                int topId = g_activeNodes.back();
-                for (auto &node : g_traceNodes) {
-                    if (node.id == topId) {
-                        node.failed = true;
-                        node.failReason = OutStr.c_str();
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    void BeginSourceFile(const LangOptions &LO, const Preprocessor *PP) override {
-        if (Original) Original->BeginSourceFile(LO, PP);
-    }
-    void EndSourceFile() override {
-        if (Original) Original->EndSourceFile();
-    }
-};
-
 class VisualizerAction : public ASTFrontendAction {
 public:
-    bool BeginSourceFileAction(CompilerInstance &CI) override {
-        if (CI.hasDiagnostics()) {
-            DiagnosticConsumer *Original = CI.getDiagnostics().getClient();
-            CI.getDiagnostics().setClient(new ErrorTrappingDiagConsumer(Original), true);
-        }
-        return true;
-    }
-
     std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
         return std::make_unique<VisualizerASTConsumer>(CI);
     }
