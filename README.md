@@ -1,37 +1,91 @@
-# C++ Template Instantiation Visualizer 🚀
+<div align="center">
+  <h1>MetaTrace</h1>
+  <p><strong>A highly visual, standalone Desktop tool to trace and debug C++ Template Metaprogramming and SFINAE instantiation steps using an embedded Clang compiler.</strong></p>
+</div>
 
-A full-stack, browser-based debugger and visualizer for C++ template metaprogramming. 
+---
 
-Template metaprogramming in C++ is notoriously difficult to debug, often resulting in cryptic error messages and deep recursion trees that are impossible to follow. This project solves that by integrating directly into the Clang compilation pipeline to trace, record, and interactively visualize C++ template instantiations!
+## 🔍 Overview
+**MetaTrace** gives you an X-Ray view into the C++ compiler's template instantiation process. If you have ever stared at a multi-page compiler error or wondered why a specific SFINAE template specialization wasn't chosen, MetaTrace is for you.
 
-## Features 🌟
+By utilizing a custom-built LLVM Clang plugin hooked up to a rich, hardware-accelerated frontend UI, MetaTrace visualizes the tree of template instantiations, type aliases, and SFINAE failures as a clean, interactive directed graph.
 
-- **Interactive Graph Visualization:** View the deep instantiation hierarchy of your templates in a beautiful, layout-aware DAG (Directed Acyclic Graph) using GoldenLayout and Vue Flow.
-- **Time-Travel Debugging:** Step backward and forward through the exact sequence of instantiation events just like a traditional debugger.
-- **Language Server Protocol (LSP):** Integrated Monaco editor backed by a bundled `clangd` language server provides full C++ code completion, inline diagnostics, and hover support right in your browser.
-- **Standalone Release Bundle:** The backend is packaged into a self-contained executable that hosts the frontend SPA and runs the Clang plugin. No dependencies or build environments required to run the release!
-- **Data Persistence:** Save and restore your personalized, resizable GoldenLayout pane arrangements.
+## ✨ Features
+- **Real-Time Interactive Graph:** Watch templates instantiate and unfold in a node-based interface as you type code.
+- **Embedded Editor:** Features a built-in Monaco (VS Code) editor with full C++ syntax highlighting.
+- **Standalone Desktop App:** Distributed as a single, fully-packaged executable without any external dependencies (like Node or Python). Just run it and it launches in a native window using your system browser.
+- **Integrated LSP:** Includes full clangd-based Language Server Protocol support for auto-complete and hover documentation.
+- **C++ Standard Selection:** Toggle compiler versions on-the-fly from C++98 up to C++26.
+- **SFINAE Debugging:** Failed template substitutions and their precise error reasons are highlighted in red directly on the node graph.
 
-## Architecture 🏗️
+## 🚀 How to Use
+If you download a pre-built binary release, using MetaTrace is incredibly easy:
+1. Double click `MetaTrace.exe`.
+2. The application will start its local backend and automatically pop open a dedicated UI window.
+3. Write your C++ templates in the editor on the left.
+4. Watch the template instantiation graph build on the right in real-time. 
 
-The project is broken into three main components:
+## 🛠️ Building from Source
 
-1. **Frontend:** A modern Vue 3 SPA built with Vite, utilizing `golden-layout` for pane management, `monaco-editor` for the LSP-backed coding environment, and `@vue-flow` for the interactive template graph.
-2. **Backend:** A Node.js Express server that orchestrates compilation runs, manages the WebSocket connection for the `clangd` language server, and serves the frontend assets.
-3. **Clang Plugin (`Visualizer.exe`):** A custom C++ executable built against LLVM/Clang Tooling APIs that intercepts AST compilation events (like `InstantiateClass` and `InstantiateFunction`), evaluates the runtime context, and generates a time-series `trace_custom.json` profile of your metaprograms.
+If you want to build the project from scratch, you will need **Node.js (v18+)** and **Visual Studio (with C++ CMake tools)** installed on your machine.
 
-## Quick Start 🚀
+### 1. Clone the repository
+```bash
+git clone https://github.com/your-username/MetaTrace.git
+cd MetaTrace
+```
 
-### Running the Release
-1. Navigate to the `release/` directory.
-2. Run `server.exe`.
-3. Open your browser to [http://localhost:3001](http://localhost:3001).
+### 2. Install dependencies
+```bash
+npm run install:all
+```
+*This command will install the dependencies for both the frontend UI and the Node.js backend proxy server.*
 
-### Development Mode
-1. Start the frontend: `cd frontend && npm run dev`
-2. Start the backend: `cd backend && npm run dev`
-3. The system expects `clangd.exe` to be available in your path or located in the `external/` folder.
+### 3. Build the LLVM Clang Plugin (Visualizer)
+MetaTrace ships with a custom C++ compiler frontend built against LLVM. 
+```bash
+cd backend/plugin
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+```
 
-## License 📜
+### 4. Run the Dev Server
+To run the app locally with hot-reloading for the frontend UI:
+```bash
+# Terminal 1: Start the backend server
+cd backend
+npm run dev
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+# Terminal 2: Start the frontend dev server
+cd frontend
+npm run dev
+```
+
+### 5. Package into a Standalone Binary
+To compile the frontend, bundle the backend, embed the Clang plugin, and package everything into a single `.exe`:
+```bash
+# From the project root
+npm run build
+```
+The final standalone binary will be located in the `release/` directory.
+
+## 🤝 Contributing
+
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+To start contributing:
+1. **Fork the Project**
+2. **Create your Feature Branch** (`git checkout -b feature/AmazingFeature`)
+3. **Commit your Changes** (`git commit -m 'Add some AmazingFeature'`)
+4. **Push to the Branch** (`git push origin feature/AmazingFeature`)
+5. **Open a Pull Request**
+
+### Areas for Contribution
+- **Graph Layouts:** Improving the Dagre/VueFlow node positioning for massive, deeply nested template metaprograms.
+- **CMake Support:** Expanding the tool to support analyzing templates across multiple files and `CMakeLists.txt` projects instead of just single files.
+- **UI/UX Tweaks:** Improving the dark mode palette, adding minimaps, or extending the hover tooltips.
+
+## 📝 License
+Distributed under the MIT License.
