@@ -50,16 +50,23 @@ Because developer environments differ, you must configure CMake and build the pl
 Please see the **[Plugin Build Instructions](backend/plugin/README.md)** for details on how to set up your `LLVM_PATH` and compile the plugin.
 
 ### 4. Run the Dev Server
-To run the app locally with hot-reloading for the frontend UI:
-```bash
-# Terminal 1: Start the backend server
-cd backend
-npm run dev
+To run the app locally with hot-reloading for the frontend UI, the backend and frontend run on separate ports. You need to tell each side which port to use, if port 80 is busy on your system.
 
-# Terminal 2: Start the frontend dev server
-cd frontend
-npm run dev
+```bash
+# Terminal 1: Start the backend server on port 8001
+cd backend
+PORT=8001 npm run dev
 ```
+
+```bash
+# Terminal 2: Start the Vite frontend dev server
+# BACKEND_PORT must match the PORT used above so the proxy routes correctly
+cd frontend
+BACKEND_PORT=8001 npm run dev
+```
+
+Then open **http://localhost:5173** in your browser.
+
 
 ### 5. Package into a Standalone Binary
 To compile the frontend, bundle the backend, embed the Clang plugin, and package everything into a single `.exe`:
