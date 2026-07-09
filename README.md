@@ -1,6 +1,6 @@
 <div align="center">
   <h1>MetaTrace</h1>
-  <p><strong>A highly visual, standalone Desktop tool to trace and debug C++ Template Metaprogramming and SFINAE instantiation steps using an embedded Clang compiler.</strong></p>
+  <p><strong>A visual, standalone tool to trace and debug C++ Template instantiations using an embedded Clang compiler.</strong></p>
   <br>
   <img src="Assets/UI.png" alt="MetaTrace UI Screenshot" width="100%">
 </div>
@@ -22,8 +22,8 @@ By utilizing a custom-built LLVM Clang plugin hooked up to a rich, hardware-acce
 
 ## 🚀 How to Use
 If you download a pre-built binary release, using MetaTrace is incredibly easy:
-1. Double click `MetaTrace.exe`.
-2. The application will start its local backend and automatically pop open a dedicated UI window.
+1. Run `MetaTrace`.
+2. Open `http://localhost` in your browser.
 3. Write your C++ templates in the editor on the left.
 4. Watch the template instantiation graph build on the right in real-time. 
 
