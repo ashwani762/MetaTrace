@@ -49,13 +49,13 @@ echo "======================================="
 echo "4. Packaging Backend to Binary using pkg..."
 echo "======================================="
 npm install pkg --no-save
-npx pkg . --target node18-linux-x64 --output CppTemplateVisualizer
+npx pkg . --target node18-linux-x64 --output MetaTrace
 
 echo "======================================="
 echo "5. Creating Release Directory..."
 echo "======================================="
 mkdir -p "$RELEASE_DIR"
-cp "$BACKEND_DIR/CppTemplateVisualizer" "$RELEASE_DIR/"
+cp "$BACKEND_DIR/MetaTrace" "$RELEASE_DIR/"
 
 echo "======================================="
 echo "SUCCESS! Linux Release is ready in: $RELEASE_DIR"

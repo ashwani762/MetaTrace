@@ -51,5 +51,5 @@ backend/src/version.ts
 
 # Compiled Clang Visualizer binary
 backend/plugin/Visualizer
-backend/CppTemplateVisualizer
+backend/MetaTrace
 backend/plugin/build/
