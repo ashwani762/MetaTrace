@@ -8,6 +8,7 @@ import crypto from 'crypto';
 
 let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 80;
 let host = '127.0.0.1';
+let isDebug = false;
 
 for (let i = 2; i < process.argv.length; i++) {
     const arg = process.argv[i];
@@ -17,6 +18,8 @@ for (let i = 2; i < process.argv.length; i++) {
         host = process.argv[++i] || host;
     } else if (arg === '--expose') {
         host = '0.0.0.0';
+    } else if (arg === '--debug' || arg === '-d') {
+        isDebug = true;
     }
 }
 
@@ -83,21 +86,21 @@ app.post('/api/compile', async (req, res) => {
     // 1. Generate trace using Visualizer.exe
     const VISUALIZER_BIN = path.resolve(baseDir, 'plugin/Visualizer.exe');
     const cmdTrace = `"${VISUALIZER_BIN}" "${cppFile}" -- ${stdFlag}`;
-    console.log(`[DEBUG] Executing: ${cmdTrace}`);
+    if (isDebug) console.log(`[DEBUG] Executing: ${cmdTrace}`);
     const traceResult = await execute(cmdTrace, tmpDir, ac.signal);
-    console.log(`[DEBUG] Execute finished`);
+    if (isDebug) console.log(`[DEBUG] Execute finished`);
     
     const traceFile = path.join(tmpDir, 'trace_custom.json');
     let traceDataObj = { nodes: [], events: [], values: {} };
     try {
         const traceData = await fs.readFile(traceFile, 'utf-8');
-        console.log(`[DEBUG] Trace file read successfully, length: ${traceData.length}`);
+        if (isDebug) console.log(`[DEBUG] Trace file read successfully, length: ${traceData.length}`);
         traceDataObj = JSON.parse(traceData);
     } catch (e) {
         console.error("No custom trace generated:", e);
     }
 
-    console.log(`[DEBUG] Sending JSON response`);
+    if (isDebug) console.log(`[DEBUG] Sending JSON response`);
     res.json({
         nodes: traceDataObj.nodes,
         events: traceDataObj.events,
@@ -105,7 +108,7 @@ app.post('/api/compile', async (req, res) => {
         output: traceResult.stdout,
         stderr: traceResult.stderr
     });
-    console.log(`[DEBUG] JSON response sent`);
+    if (isDebug) console.log(`[DEBUG] JSON response sent`);
 
     // Cleanup
     fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
@@ -141,6 +144,7 @@ const server = app.listen(port, host, () => {
   Options used:
     --port    ${port}
     --host    ${host}
+    --debug   ${isDebug}
     
   (Use --help or -h for more options)
 =============================================================
