@@ -8,6 +8,11 @@ const backendDir = path.join(rootDir, 'backend');
 const releaseDir = path.join(rootDir, 'release');
 
 console.log('\n=======================================');
+console.log('0. Generating Version Information...');
+console.log('=======================================');
+execSync('node scripts/generate_version.js', { cwd: rootDir, stdio: 'inherit' });
+
+console.log('\n=======================================');
 console.log('1. Building C++ Visualizer Plugin...');
 console.log('=======================================');
 const pluginDir = path.join(backendDir, 'plugin');
@@ -15,7 +20,7 @@ const pluginDir = path.join(backendDir, 'plugin');
 execSync('build.bat', { cwd: pluginDir, stdio: 'inherit' });
 
 console.log('\n=======================================');
-console.log('2. Building Frontend...');
+console.log('2. Compiling Frontend...');
 console.log('=======================================');
 execSync('npm install', { cwd: frontendDir, stdio: 'inherit' });
 execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
@@ -37,8 +42,8 @@ console.log('3. Packaging Backend to Binary using pkg...');
 console.log('=======================================');
 // Install pkg locally in the backend folder
 execSync('npm install pkg --no-save', { cwd: backendDir, stdio: 'inherit' });
-// Run pkg to compile server.js into CppTemplateVisualizer.exe
-execSync('npx pkg dist/server.js --target node18-win-x64 --output CppTemplateVisualizer.exe', { cwd: backendDir, stdio: 'inherit' });
+// Run pkg to compile server.js into CppTemplateVisualizer.exe using package.json config
+execSync('npx pkg . --target node18-win-x64 --output CppTemplateVisualizer.exe', { cwd: backendDir, stdio: 'inherit' });
 
 console.log('Adding logo to executable...');
 execSync('npx resedit-cli --in CppTemplateVisualizer.exe --out CppTemplateVisualizer.exe --icon 1,../logo.ico', { cwd: backendDir, stdio: 'inherit' });

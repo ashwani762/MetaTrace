@@ -16,6 +16,11 @@ if ! command -v cmake &> /dev/null || ! dpkg -s llvm-dev &> /dev/null || ! dpkg 
 fi
 
 echo "======================================="
+echo "0. Generating Version Information..."
+echo "======================================="
+node scripts/generate_version.js
+
+echo "======================================="
 echo "1. Building C++ Visualizer Plugin..."
 echo "======================================="
 cd "$BACKEND_DIR/plugin"
@@ -44,7 +49,7 @@ echo "======================================="
 echo "4. Packaging Backend to Binary using pkg..."
 echo "======================================="
 npm install pkg --no-save
-npx pkg dist/server.js --target node18-linux-x64 --output CppTemplateVisualizer
+npx pkg . --target node18-linux-x64 --output CppTemplateVisualizer
 
 echo "======================================="
 echo "5. Creating Release Directory..."

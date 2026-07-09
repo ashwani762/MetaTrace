@@ -12,6 +12,9 @@
 #include "llvm/Support/JSON.h"
 #include <vector>
 #include <string>
+#include <iostream>
+#include <fstream>
+#include "version.h"
 #include <chrono>
 #include "clang/Basic/Diagnostic.h"
 
@@ -300,6 +303,15 @@ public:
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 
 int main(int argc, const char **argv) {
+    if (argc >= 2 && std::string(argv[1]) == "--version") {
+#ifdef BUILD_VERSION
+        llvm::outs() << BUILD_VERSION << "\n";
+#else
+        llvm::outs() << "unknown\n";
+#endif
+        return 0;
+    }
+
     auto ExpectedParser = CommonOptionsParser::create(argc, argv, MyToolCategory);
     if (!ExpectedParser) {
         llvm::errs() << ExpectedParser.takeError();

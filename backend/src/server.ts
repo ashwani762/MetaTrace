@@ -7,6 +7,7 @@ import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { BUILD_VERSION } from './version';
 
 let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 80;
 let host = '127.0.0.1';
@@ -83,9 +84,20 @@ if (isPkg) {
         fsSync.mkdirSync(pluginCacheDir, { recursive: true });
     }
     const extractPath = path.join(pluginCacheDir, process.platform === 'win32' ? 'Visualizer.exe' : 'Visualizer');
-    if (!fsSync.existsSync(extractPath)) {
-        console.log(`[INFO] Extracting Visualizer to ${extractPath}...`);
+    const versionPath = path.join(pluginCacheDir, 'version.txt');
+    
+    let needsExtract = true;
+    if (fsSync.existsSync(extractPath) && fsSync.existsSync(versionPath)) {
+        const cachedVersion = fsSync.readFileSync(versionPath, 'utf8').trim();
+        if (cachedVersion === BUILD_VERSION) {
+            needsExtract = false;
+        }
+    }
+
+    if (needsExtract) {
+        console.log(`[INFO] Extracting Visualizer (version ${BUILD_VERSION}) to ${extractPath}...`);
         fsSync.writeFileSync(extractPath, fsSync.readFileSync(VISUALIZER_BIN));
+        fsSync.writeFileSync(versionPath, BUILD_VERSION);
         if (process.platform !== 'win32') {
             fsSync.chmodSync(extractPath, '755');
         }
