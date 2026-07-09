@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
 
     <!-- Download Notification Popup -->
     <transition enter-active-class="transition ease-out duration-300" enter-from-class="transform translate-y-2 opacity-0" enter-to-class="transform translate-y-0 opacity-100" leave-active-class="transition ease-in duration-200" leave-from-class="transform translate-y-0 opacity-100" leave-to-class="transform translate-y-2 opacity-0">
-      <div v-if="downloadNotif" class="absolute bottom-4 left-4 bg-gray-800 text-blue-400 border border-blue-800 px-4 py-2 rounded shadow-lg flex items-center z-50">
+      <div v-if="downloadNotif" class="absolute bottom-6 right-6 bg-gray-900/90 backdrop-blur-md text-emerald-400 border border-emerald-500/50 px-5 py-3 rounded-xl shadow-2xl flex items-center z-50 font-medium tracking-wide">
         <svg class="w-5 h-5 mr-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="!downloadNotif.includes('complete') && !downloadNotif.includes('Error')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="downloadNotif.includes('complete')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
         <svg class="w-5 h-5 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="downloadNotif.includes('Error')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>

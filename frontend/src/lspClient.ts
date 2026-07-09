@@ -5,6 +5,7 @@ export class SimpleLspClient {
   private messageId = 1;
   private pendingRequests = new Map<number, { resolve: (val: any) => void, reject: (err: any) => void }>();
   private model: monaco.editor.ITextModel;
+  private isInitialized = false;
 
   constructor(url: string, editor: monaco.editor.IStandaloneCodeEditor) {
     this.model = editor.getModel()!;
@@ -21,6 +22,7 @@ export class SimpleLspClient {
           }
         }
       }).then(() => {
+        this.isInitialized = true;
         this.sendNotification('initialized', {});
         this.sendNotification('textDocument/didOpen', {
           textDocument: {
@@ -58,7 +60,7 @@ export class SimpleLspClient {
     };
 
     this.model.onDidChangeContent(() => {
-      if (this.ws.readyState === WebSocket.OPEN) {
+      if (this.ws.readyState === WebSocket.OPEN && this.isInitialized) {
         this.sendNotification('textDocument/didChange', {
           textDocument: { uri: 'file:///main.cpp', version: 2 },
           contentChanges: [{ text: this.model.getValue() }]
@@ -68,7 +70,7 @@ export class SimpleLspClient {
 
     monaco.languages.registerHoverProvider('cpp', {
       provideHover: async (_model, position) => {
-        if (this.ws.readyState !== WebSocket.OPEN) return null;
+        if (this.ws.readyState !== WebSocket.OPEN || !this.isInitialized) return null;
         const res = await this.sendRequest('textDocument/hover', {
           textDocument: { uri: 'file:///main.cpp' },
           position: { line: position.lineNumber - 1, character: position.column - 1 }
