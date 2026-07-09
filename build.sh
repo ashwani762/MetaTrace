@@ -46,6 +46,12 @@ npm install
 npm run build
 
 echo "======================================="
+echo "Copying frontend dist to backend/public for embedding..."
+echo "======================================="
+rm -rf "$BACKEND_DIR/public"
+cp -r "$FRONTEND_DIR/dist" "$BACKEND_DIR/public"
+
+echo "======================================="
 echo "4. Packaging Backend to Binary using pkg..."
 echo "======================================="
 npm install pkg --no-save
