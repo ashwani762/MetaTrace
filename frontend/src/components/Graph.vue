@@ -611,6 +611,22 @@ watch(() => props.currentIndex, () => {
         </button>
     </div>
 
+    <!-- Bottom-Right Legend overlay -->
+    <div class="absolute bottom-4 right-4 z-10 bg-gray-900/90 backdrop-blur-sm border border-gray-700 p-3 rounded-lg shadow-xl text-xs font-medium text-gray-300">
+      <div class="mb-2 text-gray-400 font-semibold border-b border-gray-700 pb-1">Legend</div>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #4c1d95; border-color: #a78bfa;"></div>Class Template</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #7c2d12; border-color: #ea580c;"></div>Implicit Inst.</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #9a3412; border-color: #fb923c;"></div>Explicit Spec.</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #431407; border-color: #f97316;"></div>Partial Spec.</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #1e3a8a; border-color: #60a5fa;"></div>Function/Method</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #1f2937; border-color: #10b981;"></div>Var Template</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #1f2937; border-color: #f43f5e;"></div>Type Alias</div>
+        <div class="flex items-center"><div class="w-3 h-3 rounded mr-2 border" style="background: #064e3b; border-color: #34d399;"></div>Concept</div>
+        <div class="flex items-center col-span-2"><div class="w-3 h-3 rounded mr-2 border" style="background: #450a0a; border-color: #ef4444;"></div>Error / SFINAE Failure</div>
+      </div>
+    </div>
+
     <VueFlow
       :nodes="nodes"
       :edges="edges"
