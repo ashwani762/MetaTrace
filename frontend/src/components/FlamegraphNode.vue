@@ -48,6 +48,7 @@ const hue = computed(() => {
 });
 
 const bgColor = computed(() => {
+    if (isSearchMatch.value) return '#facc15'; // bright yellow for search matches
     if (props.node.failed) return '#ef4444'; // Solid Red for failed SFINAE
     // Warm colors typical of VTune
     return `hsl(${hue.value}, 85%, 45%)`;
@@ -77,12 +78,11 @@ const unrecordedPercent = computed(() => {
     :style="{ width: `${widthPercent}%`, minWidth: '1px' }"
   >
     <div 
-      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs text-white border-r border-[#1e1e1e] cursor-pointer transition-colors"
-      :class="{
-        'border-b': !isBottomUp,
-        'border-t': isBottomUp,
-        'ring-2 ring-yellow-400 ring-inset z-10': isSearchMatch
-      }"
+      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs border-r border-[#1e1e1e] cursor-pointer transition-colors"
+      :class="[
+        isBottomUp ? 'border-t' : 'border-b',
+        isSearchMatch ? 'text-black font-bold' : 'text-white'
+      ]"
       :style="{ backgroundColor: bgColor }"
       :title="`${node.name}\nTotal: ${(node.dur / 1000).toFixed(3)} ms`"
       @click="onClick"
