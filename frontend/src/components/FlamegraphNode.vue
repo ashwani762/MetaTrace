@@ -54,21 +54,6 @@ const bgColor = computed(() => {
     return `hsl(${hue.value}, 85%, 45%)`;
 });
 
-// Calculate how much time in this node was NOT spent in its children (self time)
-const unrecordedDur = computed(() => {
-    let childrenDur = 0;
-    for (const child of (props.node.children || [])) {
-        childrenDur += (child.dur || 0);
-    }
-    const rem = props.node.dur - childrenDur;
-    return rem > 0 ? rem : 0;
-});
-
-const unrecordedPercent = computed(() => {
-    if (props.node.dur === 0) return 0;
-    return Math.min(100, Math.max(0, (unrecordedDur.value / props.node.dur) * 100));
-});
-
 </script>
 
 <template>
@@ -91,7 +76,7 @@ const unrecordedPercent = computed(() => {
     >
       {{ node.name }}
     </div>
-    <div class="flex flex-row w-full h-full" v-if="(node.children && node.children.length > 0) || unrecordedDur > 0">
+    <div class="flex flex-row w-full h-full" v-if="node.children && node.children.length > 0">
       <FlamegraphNode 
         v-for="child in node.children" 
         :key="child.id" 
@@ -99,8 +84,6 @@ const unrecordedPercent = computed(() => {
         :totalDur="node.dur" 
         :depth="depth + 1"
       />
-      <!-- Render the empty remaining space if children don't take up 100% -->
-      <div v-if="unrecordedPercent > 0" :style="{ width: `${unrecordedPercent}%` }" class="h-full border-r border-gray-900 bg-gray-800/20" title="Self Time"></div>
     </div>
   </div>
 </template>
