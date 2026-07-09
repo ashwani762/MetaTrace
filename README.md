@@ -1,6 +1,8 @@
 <div align="center">
   <h1>MetaTrace</h1>
   <p><strong>A highly visual, standalone Desktop tool to trace and debug C++ Template Metaprogramming and SFINAE instantiation steps using an embedded Clang compiler.</strong></p>
+  <br>
+  <img src="Assets/UI.png" alt="MetaTrace UI Screenshot" width="100%">
 </div>
 
 ---
