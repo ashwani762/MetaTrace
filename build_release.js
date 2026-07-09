@@ -8,7 +8,14 @@ const backendDir = path.join(rootDir, 'backend');
 const releaseDir = path.join(rootDir, 'release');
 
 console.log('\n=======================================');
-console.log('1. Building Frontend...');
+console.log('1. Building C++ Visualizer Plugin...');
+console.log('=======================================');
+const pluginDir = path.join(backendDir, 'plugin');
+// Build Visualizer using build.bat which sets up MSVC env and runs cmake + ninja
+execSync('build.bat', { cwd: pluginDir, stdio: 'inherit' });
+
+console.log('\n=======================================');
+console.log('2. Building Frontend...');
 console.log('=======================================');
 execSync('npm install', { cwd: frontendDir, stdio: 'inherit' });
 execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
