@@ -7,15 +7,22 @@ const backendSrc = path.join(rootDir, 'backend', 'src');
 const backendPlugin = path.join(rootDir, 'backend', 'plugin');
 
 function generateVersion() {
-    let commitHash = 'unknown';
-    try {
-        commitHash = execSync('git rev-parse --short HEAD', { cwd: rootDir }).toString().trim();
-    } catch (e) {
-        console.warn('Could not determine git commit hash, using unknown.');
+    let versionString = 'Dev';
+
+    const args = process.argv.slice(2);
+    const isDev = args.includes('dev');
+
+    if (!isDev) {
+        let commitHash = 'unknown';
+        try {
+            commitHash = execSync('git rev-parse --short HEAD', { cwd: rootDir }).toString().trim();
+        } catch (e) {
+            console.warn('Could not determine git commit hash, using unknown.');
+        }
+        
+        const timestamp = new Date().toISOString();
+        versionString = `${commitHash}-${timestamp}`;
     }
-    
-    const timestamp = new Date().toISOString();
-    const versionString = `${commitHash}-${timestamp}`;
 
     console.log(`Generating version info: ${versionString}`);
 

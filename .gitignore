@@ -44,3 +44,7 @@ compile_commands.json
 
 # Exclude external dependencies from being ignored
 backend/public/
+
+# Auto-generated version files
+backend/plugin/version.h
+backend/src/version.ts
