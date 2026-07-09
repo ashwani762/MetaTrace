@@ -25,6 +25,7 @@ export const standard = ref('c++17') // C++ standard (e.g. c++17, c++20)
 export const isCompiling = ref(false)
 export const errorMsg = ref('')
 export const compileOutput = ref('')
+export const globalValues = ref<Record<string, string>>({})
 
 // Trace visualization state
 export const traceSteps = ref<any[]>([]) // Flat list of time-travel steps (begin/end)
@@ -110,6 +111,22 @@ export const activeVariables = computed(() => {
   return vars;
 });
 
+export const activeTypeAliases = computed(() => {
+  const stack = activeStack.value;
+  if (stack.length === 0) return [];
+  const current = stack[0];
+  const aliases = [];
+
+  // If the current node is a TypeAlias template instantiation, show its specific desugaring!
+  if (current.isAlias) {
+    const val = globalValues.value[current.name];
+    if (val) {
+      aliases.push({ name: current.name, value: val });
+    }
+  }
+  return aliases;
+});
+
 export const activeLocation = computed(() => {
   const stack = activeStack.value;
   if (stack.length === 0) return undefined;
@@ -132,9 +149,9 @@ export const activeExplanation = computed(() => {
   } else if (step.type === 'end') {
     if (step.values && Object.keys(step.values).length > 0) {
       const vals = Object.entries(step.values).map(([k, v]) => `${k} = ${v}`).join(', ');
-      return `Resolved \`${step.name}\` ➔ ${vals}`;
+      return `Completed \`${step.name}\` ➔ ${vals}`;
     } else {
-      return `Resolved \`${step.name}\``;
+      return `Completed \`${step.name}\``;
     }
   }
   return "";
@@ -188,8 +205,8 @@ export const compileCode = async () => {
       compileOutput.value = data.error + ": " + (data.details || '');
     } else {
       let outputText = '';
-      if (data.stderr) outputText += data.stderr + "\n";
-      if (data.output) outputText += data.output + "\n";
+      if (data.stderr) outputText += data.stderr + "\\n";
+      if (data.output) outputText += data.output + "\\n";
       compileOutput.value = outputText.trim();
       
       if (!data.nodes || data.nodes.length === 0) {
@@ -264,7 +281,8 @@ export const compileCode = async () => {
             line: nodeObj.line, 
             col: nodeObj.col,
             failed: nodeObj.failed,
-            failReason: nodeObj.failReason
+            failReason: nodeObj.failReason,
+            isAlias: nodeObj.isAlias
           });
         });
 
@@ -280,6 +298,7 @@ export const compileCode = async () => {
             col: n.col,
             failed: n.failed,
             failReason: n.failReason,
+            isAlias: n.isAlias,
             children: [],
             values: steps.find(s => s.id === n.id)?.values || {}
           });
@@ -298,8 +317,8 @@ export const compileCode = async () => {
         treeData.value = tree;
         currentStepIndex.value = steps.length > 0 ? 0 : -1;
         
-        // Store values in a global map for Variables panel if needed
-        (window as any).__TRACE_VALUES__ = data.values || {};
+        // Store values in a global reactive ref for Variables/Types panels
+        globalValues.value = data.values || {};
       }
     }
   } catch (e: any) {

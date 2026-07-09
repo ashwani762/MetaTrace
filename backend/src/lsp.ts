@@ -3,19 +3,42 @@ import { spawn } from 'child_process';
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { downloadClangd } from './clangd_downloader';
 
-export function setupLSP(server: http.Server, baseDir: string) {
+export function setupLSP(server: http.Server) {
     const wss = new WebSocketServer({ server, path: '/lsp' });
 
-    wss.on('connection', (ws: WebSocket) => {
+    wss.on('connection', async (ws: WebSocket) => {
         console.log('Client connected to LSP');
         
-        let clangdPath = path.join(baseDir, 'plugin', 'clangd.exe');
-        if (!fs.existsSync(clangdPath)) {
-            // Fallback to system PATH for development if not bundled
-            clangdPath = 'clangd'; 
+        // Helper to send custom progress notifications to the frontend
+        const sendProgress = (msg: string) => {
+            const notif = {
+                jsonrpc: "2.0",
+                method: "custom/downloadProgress",
+                params: { message: msg }
+            };
+            const msgStr = JSON.stringify(notif);
+            const header = `Content-Length: ${Buffer.byteLength(msgStr, 'utf8')}\r\n\r\n`;
+            if (ws.readyState === ws.OPEN) {
+                ws.send(header + msgStr);
+            }
+        };
+
+        const appDataDir = path.join(os.tmpdir(), 'CppTemplateVisualizer');
+        const pluginCacheDir = path.join(appDataDir, 'plugin');
+
+        let clangdPath: string;
+        try {
+            clangdPath = await downloadClangd(pluginCacheDir, sendProgress);
+        } catch (err: any) {
+            console.error('Failed to download clangd:', err);
+            sendProgress(`Error: ${err.message}`);
+            ws.close();
+            return;
         }
-        
+
         const clangd = spawn(clangdPath, [
             '--log=error',
             '--background-index'

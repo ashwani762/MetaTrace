@@ -19,6 +19,12 @@ console.log('=======================================');
 execSync('npm install', { cwd: backendDir, stdio: 'inherit' });
 execSync('npm run build', { cwd: backendDir, stdio: 'inherit' });
 
+console.log('Copying frontend dist to backend/public for embedding...');
+if (fs.existsSync(path.join(backendDir, 'public'))) {
+    fs.rmSync(path.join(backendDir, 'public'), { recursive: true, force: true });
+}
+fs.cpSync(path.join(frontendDir, 'dist'), path.join(backendDir, 'public'), { recursive: true });
+
 console.log('\n=======================================');
 console.log('3. Packaging Backend to Binary using pkg...');
 console.log('=======================================');
@@ -40,26 +46,6 @@ if (!fs.existsSync(releaseDir)) {
 console.log('Copying artifacts to release folder...');
 // Copy CppTemplateVisualizer binary
 fs.copyFileSync(path.join(backendDir, 'CppTemplateVisualizer.exe'), path.join(releaseDir, 'CppTemplateVisualizer.exe'));
-
-// Copy Visualizer plugin
-const pluginDir = path.join(releaseDir, 'plugin');
-if (!fs.existsSync(pluginDir)) {
-    fs.mkdirSync(pluginDir);
-}
-fs.copyFileSync(path.join(backendDir, 'plugin', 'Visualizer.exe'), path.join(pluginDir, 'Visualizer.exe'));
-
-// Copy clangd to the release package to remove external dependencies
-// Copy clangd to the release package to remove external dependencies
-const externalClangdPath = path.join(rootDir, 'external', 'clangd.exe');
-if (fs.existsSync(externalClangdPath)) {
-    fs.copyFileSync(externalClangdPath, path.join(pluginDir, 'clangd.exe'));
-    console.log(`Copied clangd.exe from external/ to release package.`);
-} else {
-    console.warn(`WARNING: clangd.exe not found in ${externalClangdPath}.`);
-}
-
-// Copy frontend dist to public
-fs.cpSync(path.join(frontendDir, 'dist'), path.join(releaseDir, 'public'), { recursive: true });
 
 console.log('\n=======================================');
 console.log('SUCCESS! Release is ready in: ' + releaseDir);

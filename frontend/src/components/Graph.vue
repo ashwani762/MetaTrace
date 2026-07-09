@@ -481,6 +481,23 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
             borderStyle = 'dashed';
             shadow = '0 0 10px rgba(239, 68, 68, 0.4)';
             labelText = '❌ ' + labelText;
+        } else if (nodeData.isAlias) {
+            // Orange theme for aliases
+            labelText = '🏷️ ' + labelText;
+            if (isCurrent) {
+                bgColor = '#9a3412'; // Orange-800
+                borderColor = '#fb923c'; // Orange-400
+                shadow = '0 0 15px rgba(251, 146, 60, 0.5)';
+            } else if (isActive) {
+                bgColor = '#431407'; // Orange-950
+                borderColor = '#f97316'; // Orange-500
+            } else if (isFinished) {
+                bgColor = '#7c2d12'; // Orange-900
+                borderColor = '#ea580c'; // Orange-600
+            } else {
+                bgColor = '#431407';
+                borderColor = '#9a3412';
+            }
         } else if (isCurrent) {
             bgColor = '#1e3a8a';
             borderColor = '#60a5fa';

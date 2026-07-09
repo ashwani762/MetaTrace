@@ -9,6 +9,7 @@ import OutputPanel from './components/OutputPanel.vue';
 import ExplanationPanel from './components/ExplanationPanel.vue';
 import ScrubberPanel from './components/ScrubberPanel.vue';
 import FlamegraphPanel from './components/FlamegraphPanel.vue';
+import TypeResolutionPanel from './components/TypeResolutionPanel.vue';
 
 import { GoldenLayout, LayoutConfig, ResolvedLayoutConfig } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
@@ -34,7 +35,8 @@ const visiblePanels = ref({
   Explanation: true,
   Stack: false,
   Variables: false,
-  Flamegraph: false
+  Flamegraph: false,
+  TypeResolution: false
 });
 
 const showViewMenu = ref(false);
@@ -52,6 +54,7 @@ const generateConfig = (): LayoutConfig => {
   if (visiblePanels.value.Variables) rightBottom.push({ type: 'component', componentType: 'Variables', title: 'Variables' });
   if (visiblePanels.value.Explanation) rightBottom.push({ type: 'component', componentType: 'Explanation', title: 'Steps & Explanations' });
   if (visiblePanels.value.Flamegraph) rightBottom.push({ type: 'component', componentType: 'Flamegraph', title: 'Flamegraph' });
+  if (visiblePanels.value.TypeResolution) rightBottom.push({ type: 'component', componentType: 'TypeResolution', title: 'Type Resolution' });
 
   const rightCol = [];
   if (rightTop.length > 0) rightCol.push({ type: 'row', height: rightBottom.length > 0 ? 70 : 100, content: rightTop });
@@ -78,6 +81,15 @@ const showNotification = (msg: string) => {
   notification.value = msg;
   if (notifTimeout) clearTimeout(notifTimeout);
   notifTimeout = setTimeout(() => { notification.value = ''; }, 3000);
+};
+
+const downloadNotif = ref('');
+const handleDownloadProgress = (e: Event) => {
+  const ce = e as CustomEvent;
+  downloadNotif.value = ce.detail;
+  if (ce.detail.includes('complete') || ce.detail.includes('Error')) {
+    setTimeout(() => { downloadNotif.value = ''; }, 4000);
+  }
 };
 
 /**
@@ -143,6 +155,7 @@ const initLayout = (useSaved: boolean = true) => {
   register('Explanation', ExplanationPanel);
   register('Scrubber', ScrubberPanel);
   register('Flamegraph', FlamegraphPanel);
+  register('TypeResolution', TypeResolutionPanel);
 
   layout.init();
 };
@@ -157,7 +170,8 @@ const resetLayout = () => {
     Explanation: true,
     Stack: false,
     Variables: false,
-    Flamegraph: false
+    Flamegraph: false,
+    TypeResolution: false
   };
   initLayout(false);
   showNotification('Layout reset to default!');
@@ -177,10 +191,12 @@ const resizeHandler = () => {
 onMounted(() => {
   initLayout(true);
   window.addEventListener('resize', resizeHandler);
+  window.addEventListener('clangd-download-progress', handleDownloadProgress);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeHandler);
+  window.removeEventListener('clangd-download-progress', handleDownloadProgress);
   appInstances.forEach(app => app.unmount());
   if (layout) layout.destroy();
 });
@@ -275,6 +291,16 @@ onBeforeUnmount(() => {
       <div v-if="notification" class="absolute bottom-4 right-4 bg-gray-800 text-green-400 border border-green-800 px-4 py-2 rounded shadow-lg flex items-center z-50">
         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
         {{ notification }}
+      </div>
+    </transition>
+
+    <!-- Download Notification Popup -->
+    <transition enter-active-class="transition ease-out duration-300" enter-from-class="transform translate-y-2 opacity-0" enter-to-class="transform translate-y-0 opacity-100" leave-active-class="transition ease-in duration-200" leave-from-class="transform translate-y-0 opacity-100" leave-to-class="transform translate-y-2 opacity-0">
+      <div v-if="downloadNotif" class="absolute bottom-4 left-4 bg-gray-800 text-blue-400 border border-blue-800 px-4 py-2 rounded shadow-lg flex items-center z-50">
+        <svg class="w-5 h-5 mr-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="!downloadNotif.includes('complete') && !downloadNotif.includes('Error')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="downloadNotif.includes('complete')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <svg class="w-5 h-5 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="downloadNotif.includes('Error')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        {{ downloadNotif }}
       </div>
     </transition>
   </div>

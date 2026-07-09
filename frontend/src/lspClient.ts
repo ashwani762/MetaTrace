@@ -52,6 +52,8 @@ export class SimpleLspClient {
           source: d.source
         }));
         monaco.editor.setModelMarkers(this.model, 'clangd', markers);
+      } else if (msg.method === 'custom/downloadProgress') {
+        window.dispatchEvent(new CustomEvent('clangd-download-progress', { detail: msg.params.message }));
       }
     };
 

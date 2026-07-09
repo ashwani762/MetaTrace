@@ -28,6 +28,7 @@ struct TraceNode {
     unsigned int col;
     bool failed;
     std::string failReason;
+    bool isAlias;
 };
 
 struct TraceEvent {
@@ -60,9 +61,12 @@ public:
         if (!SM.isInMainFile(Inst.PointOfInstantiation)) {
             return;
         }
+        
+        bool isAlias = false;
         if (Inst.Entity) {
             if (auto *ND = dyn_cast<NamedDecl>(Inst.Entity)) {
                 if (isa<VarDecl>(ND) || isa<VarTemplateSpecializationDecl>(ND)) return;
+                if (isa<TypeAliasTemplateDecl>(ND) || isa<TypeAliasDecl>(ND)) isAlias = true;
             }
         }
 
@@ -87,7 +91,7 @@ public:
             col = SM.getSpellingColumnNumber(Inst.PointOfInstantiation);
         }
 
-        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, ""});
+        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, "", isAlias});
         g_events.push_back({"Enter", id});
     }
 
@@ -109,8 +113,15 @@ public:
             
             bool isInvalid = false;
             if (Inst.Entity && isa<Decl>(Inst.Entity)) {
-                if (dyn_cast<Decl>(Inst.Entity)->isInvalidDecl()) {
-                    isInvalid = true;
+                if (auto *D = dyn_cast<Decl>(Inst.Entity)) {
+                    if (D->isInvalidDecl()) isInvalid = true;
+                    llvm::errs() << "[DEBUG] atTemplateEnd entity kind: " << D->getDeclKindName() << "\n";
+                    if (auto *ND = dyn_cast<NamedDecl>(D)) {
+                        llvm::errs() << "[DEBUG] NamedDecl: " << ND->getQualifiedNameAsString() << "\n";
+                    }
+                    if (auto *TAD = dyn_cast<TypeAliasDecl>(D)) {
+                        llvm::errs() << "[DEBUG] TypeAliasDecl underlying: " << TAD->getUnderlyingType().getAsString() << "\n";
+                    }
                 }
             }
 
@@ -140,6 +151,26 @@ public:
     bool shouldVisitImplicitCode() const { return true; }
 
     bool VisitVarDecl(VarDecl *VD) {
+        // Trace type desugaring
+        QualType QT = VD->getType();
+        std::string initialType = QT.getAsString();
+        
+        // We only care if the type can be desugared (it's a typedef or alias)
+        QualType singleStep = QT.getSingleStepDesugaredType(*Context);
+        if (singleStep != QT) {
+            std::string currentStr = initialType;
+            while (true) {
+                QualType next = singleStep.getSingleStepDesugaredType(*Context);
+                if (next == singleStep) {
+                    ValuesMap[currentStr] = singleStep.getAsString();
+                    break;
+                }
+                ValuesMap[currentStr] = singleStep.getAsString();
+                currentStr = singleStep.getAsString();
+                singleStep = next;
+            }
+        }
+
         if (VD->isConstexpr() && VD->hasInit()) {
             APValue Result;
             if (VD->evaluateValue()) {
@@ -156,13 +187,13 @@ public:
 
     bool VisitTypeAliasDecl(TypeAliasDecl *TD) {
         std::string typeStr = TD->getUnderlyingType().getAsString();
-        ValuesMap[TD->getQualifiedNameAsString()] = typeStr;
+        ValuesMap[TD->getNameAsString()] = typeStr;
         return true;
     }
 
     bool VisitTypedefDecl(TypedefDecl *TD) {
         std::string typeStr = TD->getUnderlyingType().getAsString();
-        ValuesMap[TD->getQualifiedNameAsString()] = typeStr;
+        ValuesMap[TD->getNameAsString()] = typeStr;
         return true;
     }
 };
@@ -197,6 +228,7 @@ public:
             nodeObj["line"] = n.line;
             nodeObj["col"] = n.col;
             nodeObj["failed"] = n.failed;
+            nodeObj["isAlias"] = n.isAlias;
             if (n.failed) {
                 nodeObj["failReason"] = n.failReason;
             }

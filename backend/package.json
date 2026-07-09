@@ -12,15 +12,25 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "plugin/**/*",
+      "!plugin/clangd.exe",
+      "!plugin/clangd"
+    ]
+  },
   "dependencies": {
     "body-parser": "^2.3.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "extract-zip": "^2.0.1",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/extract-zip": "^2.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
     "@types/ws": "^8.18.1",
