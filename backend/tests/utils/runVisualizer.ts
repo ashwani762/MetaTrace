@@ -1,3 +1,8 @@
+// Copyright (c) 2024 MetaTrace Contributors
+// 
+// This software is released under the MIT License.
+// https://opensource.org/licenses/MIT
+
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';

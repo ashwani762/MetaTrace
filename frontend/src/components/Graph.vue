@@ -1,5 +1,11 @@
+<!--
+  Copyright (c) 2024 MetaTrace Contributors
+  
+  This software is released under the MIT License.
+  https://opensource.org/licenses/MIT
+-->
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core';
 import '@vue-flow/core/dist/style.css';
 import '@vue-flow/core/dist/theme-default.css';
@@ -614,10 +620,32 @@ watch(() => props.currentIndex, () => {
   }, 50);
 });
 
+
+const graphContainer = ref<HTMLElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (graphContainer.value) {
+    resizeObserver = new ResizeObserver(() => {
+      // Re-center when the container resizes
+      setTimeout(() => {
+        centerOnCurrentStep();
+      }, 50);
+    });
+    resizeObserver.observe(graphContainer.value);
+  }
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
+});
+
 </script>
 
 <template>
-  <div class="h-full w-full relative">
+  <div class="h-full w-full relative" ref="graphContainer">
     
     <!-- Top-Right Controls overlay for Graph specific actions -->
     <div class="absolute top-2 right-2 z-10 flex space-x-2">

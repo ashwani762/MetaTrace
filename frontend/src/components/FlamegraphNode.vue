@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2024 MetaTrace Contributors
+  
+  This software is released under the MIT License.
+  https://opensource.org/licenses/MIT
+-->
 <script setup lang="ts">
 import { computed, inject } from 'vue';
 
@@ -23,13 +29,20 @@ const widthPercent = computed(() => {
 });
 
 const hue = computed(() => {
-    // Colors based on depth, or can be random. Depth-based is nice.
-    return (props.depth * 45) % 360;
+    // VTune style warm colors: yellow to orange-red.
+    // Vary hue between 10 (red-orange) and 50 (yellow) based on string hash for consistent coloring.
+    const nameStr = props.node.name || '';
+    let hash = 0;
+    for (let i = 0; i < nameStr.length; i++) {
+        hash = nameStr.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return 10 + (Math.abs(hash) % 40);
 });
 
 const bgColor = computed(() => {
-    if (props.node.failed) return '#ef4444'; // Red for failed SFINAE
-    return `hsl(${hue.value}, 60%, 35%)`;
+    if (props.node.failed) return '#ef4444'; // Solid Red for failed SFINAE
+    // Warm colors typical of VTune
+    return `hsl(${hue.value}, 85%, 45%)`;
 });
 
 // Calculate how much time in this node was NOT spent in its children (self time)
@@ -55,7 +68,7 @@ const unrecordedPercent = computed(() => {
     :style="{ width: `${widthPercent}%`, minWidth: '1px' }"
   >
     <div 
-      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs text-white border-r border-b border-gray-900 cursor-pointer transition-colors"
+      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs text-white border-r border-b border-[#1e1e1e] cursor-pointer transition-colors"
       :style="{ backgroundColor: bgColor }"
       :title="`${node.name}\nTotal: ${(node.dur / 1000).toFixed(3)} ms`"
       @click="onClick"

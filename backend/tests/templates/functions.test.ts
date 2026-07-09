@@ -1,3 +1,8 @@
+// Copyright (c) 2024 MetaTrace Contributors
+// 
+// This software is released under the MIT License.
+// https://opensource.org/licenses/MIT
+
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import { runVisualizer, setupTestEnvironment, teardownTestEnvironment } from '../utils/runVisualizer';
 

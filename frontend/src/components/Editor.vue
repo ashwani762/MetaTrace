@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2024 MetaTrace Contributors
+  
+  This software is released under the MIT License.
+  https://opensource.org/licenses/MIT
+-->
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import * as monaco from 'monaco-editor'

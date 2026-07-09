@@ -1,3 +1,8 @@
+// Copyright (c) 2024 MetaTrace Contributors
+// 
+// This software is released under the MIT License.
+// https://opensource.org/licenses/MIT
+
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Frontend/CompilerInstance.h"
