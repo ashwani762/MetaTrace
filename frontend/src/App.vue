@@ -92,6 +92,8 @@ const handleDownloadProgress = (e: Event) => {
   }
 };
 
+let isLayoutInitializing = false;
+
 /**
  * Initializes the GoldenLayout grid and registers all panels.
  * 
@@ -100,6 +102,7 @@ const handleDownloadProgress = (e: Event) => {
 const initLayout = (useSaved: boolean = true) => {
   if (!layoutContainer.value) return;
   
+  isLayoutInitializing = true;
   if (layout) {
     appInstances.forEach(app => app.unmount());
     appInstances.length = 0;
@@ -157,9 +160,31 @@ const initLayout = (useSaved: boolean = true) => {
   register('Flamegraph', FlamegraphPanel);
   register('TypeResolution', TypeResolutionPanel);
 
-  layout.init();
-};
+  layout.addEventListener('itemDestroyed', (ev: any) => {
+    if (isLayoutInitializing) return;
+    if (ev.target && ev.target.isComponent) {
+      const compName = ev.target.componentType;
+      const mapComponentToPanel: Record<string, string> = {
+        'Editor': 'Code',
+        'Graph': 'Visualizer',
+        'Output': 'Output',
+        'Stack': 'Stack',
+        'Variables': 'Variables',
+        'Explanation': 'Explanation',
+        'Flamegraph': 'Flamegraph',
+        'TypeResolution': 'TypeResolution'
+      };
+      const panelKey = mapComponentToPanel[compName];
+      if (panelKey && visiblePanels.value[panelKey as keyof typeof visiblePanels.value]) {
+        visiblePanels.value[panelKey as keyof typeof visiblePanels.value] = false;
+        localStorage.setItem('savedGoldenLayout', JSON.stringify(layout!.saveLayout()));
+      }
+    }
+  });
 
+  layout.init();
+  isLayoutInitializing = false;
+};
 
 const resetLayout = () => {
   localStorage.removeItem('savedGoldenLayout');
@@ -259,11 +284,15 @@ onBeforeUnmount(() => {
         <div class="relative">
           <button 
             @click="showViewMenu = !showViewMenu"
-            class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors mr-2"
+            class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors mr-2 relative z-50"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
             View Panels
           </button>
+          
+          <!-- Click outside overlay -->
+          <div v-if="showViewMenu" @click="showViewMenu = false" class="fixed inset-0 z-40"></div>
+
           <div v-if="showViewMenu" class="absolute right-2 top-full mt-1 bg-gray-800 border border-gray-700 shadow-xl rounded z-50 min-w-[150px] p-2 flex flex-col space-y-2">
             <label v-for="(val, key) in visiblePanels" :key="key" class="flex items-center space-x-2 cursor-pointer text-sm text-gray-200 hover:bg-gray-700 px-2 py-1 rounded">
               <input type="checkbox" :checked="val" @change="togglePanel(key)" class="rounded bg-gray-900 border-gray-700 text-blue-500 focus:ring-0">
