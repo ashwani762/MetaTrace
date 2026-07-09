@@ -8,6 +8,7 @@ import VariablesPanel from './components/VariablesPanel.vue';
 import OutputPanel from './components/OutputPanel.vue';
 import ExplanationPanel from './components/ExplanationPanel.vue';
 import ScrubberPanel from './components/ScrubberPanel.vue';
+import FlamegraphPanel from './components/FlamegraphPanel.vue';
 
 import { GoldenLayout, LayoutConfig, ResolvedLayoutConfig } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
@@ -26,60 +27,49 @@ const layoutContainer = ref<HTMLElement | null>(null);
 let layout: GoldenLayout | null = null;
 const appInstances: ReturnType<typeof createApp>[] = [];
 
-const config: LayoutConfig = {
-  root: {
-    type: 'column',
-    content: [
-      {
-        type: 'row',
-        height: 70,
-        content: [
-          {
-            type: 'component',
-            componentType: 'Editor',
-            title: 'Code Editor',
-            width: 30
-          },
-          {
-            type: 'component',
-            componentType: 'Graph',
-            title: 'Instantiation Graph',
-            width: 70
-          }
-        ]
-      },
-      {
-        type: 'row',
-        height: 30,
-        content: [
-          {
-            type: 'component',
-            componentType: 'Output',
-            title: 'Output',
-            width: 20
-          },
-          {
-            type: 'component',
-            componentType: 'Stack',
-            title: 'Call Stack',
-            width: 20
-          },
-          {
-            type: 'component',
-            componentType: 'Variables',
-            title: 'Variables',
-            width: 25
-          },
-          {
-            type: 'component',
-            componentType: 'Explanation',
-            title: 'Steps & Explanations',
-            width: 35
-          }
-        ]
-      }
-    ]
-  }
+const visiblePanels = ref({
+  Code: true,
+  Visualizer: true,
+  Output: true,
+  Explanation: true,
+  Stack: false,
+  Variables: false,
+  Flamegraph: false
+});
+
+const showViewMenu = ref(false);
+
+const generateConfig = (): LayoutConfig => {
+  const leftCol = [];
+  if (visiblePanels.value.Code) leftCol.push({ type: 'component', componentType: 'Editor', title: 'Code Editor', height: 70 });
+  if (visiblePanels.value.Output) leftCol.push({ type: 'component', componentType: 'Output', title: 'Output', height: 30 });
+
+  const rightTop = [];
+  if (visiblePanels.value.Visualizer) rightTop.push({ type: 'component', componentType: 'Graph', title: 'Instantiation Graph' });
+
+  const rightBottom = [];
+  if (visiblePanels.value.Stack) rightBottom.push({ type: 'component', componentType: 'Stack', title: 'Call Stack' });
+  if (visiblePanels.value.Variables) rightBottom.push({ type: 'component', componentType: 'Variables', title: 'Variables' });
+  if (visiblePanels.value.Explanation) rightBottom.push({ type: 'component', componentType: 'Explanation', title: 'Steps & Explanations' });
+  if (visiblePanels.value.Flamegraph) rightBottom.push({ type: 'component', componentType: 'Flamegraph', title: 'Flamegraph' });
+
+  const rightCol = [];
+  if (rightTop.length > 0) rightCol.push({ type: 'row', height: rightBottom.length > 0 ? 70 : 100, content: rightTop });
+  if (rightBottom.length > 0) rightCol.push({ type: 'row', height: rightTop.length > 0 ? 30 : 100, content: rightBottom });
+
+  const content: any[] = [];
+  if (leftCol.length > 0) content.push({ type: 'column', width: 30, content: leftCol });
+  if (rightCol.length > 0) content.push({ type: 'column', width: 70, content: rightCol });
+
+  return {
+    settings: {
+      showPopoutIcon: false
+    },
+    root: {
+      type: 'row',
+      content: content
+    }
+  };
 };
 
 const notification = ref('');
@@ -105,7 +95,7 @@ const initLayout = (useSaved: boolean = true) => {
     layoutContainer.value.innerHTML = ''; // Ensure DOM is clean
   }
 
-  let layoutConfig = config;
+  let layoutConfig = generateConfig();
   if (useSaved) {
     const saved = localStorage.getItem('savedGoldenLayout');
     if (saved) {
@@ -126,11 +116,11 @@ const initLayout = (useSaved: boolean = true) => {
         fixSizes(layoutConfig);
 
         // GoldenLayout might save root as resolved component. Ensure it's valid.
-        if (!layoutConfig.root) layoutConfig = config;
+        if (!layoutConfig.root) layoutConfig = generateConfig();
         else layoutConfig = LayoutConfig.fromResolved(layoutConfig as unknown as ResolvedLayoutConfig);
       } catch (e) {
         console.error("Failed to parse saved layout", e);
-        layoutConfig = config;
+        layoutConfig = generateConfig();
       }
     }
   }
@@ -152,6 +142,7 @@ const initLayout = (useSaved: boolean = true) => {
   register('Output', OutputPanel);
   register('Explanation', ExplanationPanel);
   register('Scrubber', ScrubberPanel);
+  register('Flamegraph', FlamegraphPanel);
 
   layout.init();
 };
@@ -159,8 +150,22 @@ const initLayout = (useSaved: boolean = true) => {
 
 const resetLayout = () => {
   localStorage.removeItem('savedGoldenLayout');
+  visiblePanels.value = {
+    Code: true,
+    Visualizer: true,
+    Output: true,
+    Explanation: true,
+    Stack: false,
+    Variables: false,
+    Flamegraph: false
+  };
   initLayout(false);
   showNotification('Layout reset to default!');
+};
+
+const togglePanel = (panel: keyof typeof visiblePanels.value) => {
+  visiblePanels.value[panel] = !visiblePanels.value[panel];
+  initLayout(false);
 };
 
 const resizeHandler = () => {
@@ -234,8 +239,22 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-
       <div class="flex items-center space-x-2">
+        <div class="relative">
+          <button 
+            @click="showViewMenu = !showViewMenu"
+            class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors mr-2"
+          >
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+            View Panels
+          </button>
+          <div v-if="showViewMenu" class="absolute right-2 top-full mt-1 bg-gray-800 border border-gray-700 shadow-xl rounded z-50 min-w-[150px] p-2 flex flex-col space-y-2">
+            <label v-for="(val, key) in visiblePanels" :key="key" class="flex items-center space-x-2 cursor-pointer text-sm text-gray-200 hover:bg-gray-700 px-2 py-1 rounded">
+              <input type="checkbox" :checked="val" @change="togglePanel(key)" class="rounded bg-gray-900 border-gray-700 text-blue-500 focus:ring-0">
+              <span>{{ key }}</span>
+            </label>
+          </div>
+        </div>
 
         <button 
           @click="resetLayout"

@@ -18,6 +18,7 @@
     "dagre": "^0.8.5",
     "esbuild": "^0.28.1",
     "golden-layout": "^2.6.0",
+    "html-to-image": "^1.11.13",
     "monaco-editor": "^0.44.0",
     "splitpanes": "^4.1.2",
     "tailwindcss": "^4.3.2",

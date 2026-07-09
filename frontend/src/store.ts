@@ -206,6 +206,10 @@ export const compileCode = async () => {
             const existing = firstSeen.get(node.detail);
             remap.set(node.id, existing.id);
             existing.dur += (node.dur || 0); // Accumulate duration
+            if (node.failed) {
+              existing.failed = true;
+              existing.failReason = node.failReason;
+            }
           } else {
             firstSeen.set(node.detail, node);
             remap.set(node.id, node.id);
@@ -258,7 +262,9 @@ export const compileCode = async () => {
             depth: event.depth, 
             values: matchedValues, 
             line: nodeObj.line, 
-            col: nodeObj.col 
+            col: nodeObj.col,
+            failed: nodeObj.failed,
+            failReason: nodeObj.failReason
           });
         });
 
@@ -272,6 +278,8 @@ export const compileCode = async () => {
             dur: n.dur,
             line: n.line,
             col: n.col,
+            failed: n.failed,
+            failReason: n.failReason,
             children: [],
             values: steps.find(s => s.id === n.id)?.values || {}
           });

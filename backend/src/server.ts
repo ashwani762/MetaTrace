@@ -12,9 +12,21 @@ let isDebug = false;
 
 for (let i = 2; i < process.argv.length; i++) {
     const arg = process.argv[i];
-    if (arg === '--port' || arg === '-p') {
+    if (arg === '--help' || arg === '-h') {
+        console.log(`
+Usage: CppTemplateVisualizer.exe [options]
+
+Options:
+  --port, -p    Port to listen on (default: 80)
+  --host        Host to bind to (default: 127.0.0.1)
+  --expose      Bind to 0.0.0.0 to expose to the network
+  --debug, -d   Enable debug logging
+  --help, -h    Show this help message
+        `);
+        process.exit(0);
+    } else if (arg === '--port' || arg === '-p') {
         port = parseInt(process.argv[++i], 10) || port;
-    } else if (arg === '--host' || arg === '-h') {
+    } else if (arg === '--host') {
         host = process.argv[++i] || host;
     } else if (arg === '--expose') {
         host = '0.0.0.0';
@@ -144,7 +156,6 @@ const server = app.listen(port, host, () => {
   Options used:
     --port    ${port}
     --host    ${host}
-    --debug   ${isDebug}
     
   (Use --help or -h for more options)
 =============================================================

@@ -17,6 +17,36 @@ const editorRef = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
 let decorationIds: string[] = []
 let lspClient: SimpleLspClient | null = null;
 
+const highlightLocation = (loc: { line: number, col: number } | undefined) => {
+  if (!editorRef.value || !loc) {
+    if (editorRef.value && decorationIds.length > 0) {
+      editorRef.value.deltaDecorations(decorationIds, [])
+      decorationIds = []
+    }
+    return
+  }
+
+  const model = editorRef.value.getModel()
+  if (!model) return
+
+  decorationIds = editorRef.value.deltaDecorations(decorationIds, [
+    {
+      range: new monaco.Range(loc.line, 1, loc.line, 1),
+      options: {
+        isWholeLine: true,
+        className: 'active-template-line',
+        glyphMarginClassName: 'active-template-glyph'
+      }
+    }
+  ])
+  editorRef.value.revealLineInCenterIfOutsideViewport(loc.line)
+};
+
+const handleCustomHighlight = (e: Event) => {
+  const ce = e as CustomEvent;
+  highlightLocation(ce.detail);
+};
+
 onMounted(() => {
   if (!editorContainer.value) return;
 
@@ -43,9 +73,12 @@ onMounted(() => {
   // Setup custom Language Server Client
   const url = 'ws://localhost:3001/lsp';
   lspClient = new SimpleLspClient(url, editor);
+
+  window.addEventListener('editor-highlight', handleCustomHighlight);
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('editor-highlight', handleCustomHighlight);
   if (lspClient) {
     lspClient.dispose();
   }
@@ -61,28 +94,7 @@ watch(() => props.modelValue, (newVal) => {
 });
 
 watch(() => props.activeLocation, (loc) => {
-  if (!editorRef.value || !loc) {
-    if (editorRef.value && decorationIds.length > 0) {
-      editorRef.value.deltaDecorations(decorationIds, [])
-      decorationIds = []
-    }
-    return
-  }
-
-  const model = editorRef.value.getModel()
-  if (!model) return
-
-  decorationIds = editorRef.value.deltaDecorations(decorationIds, [
-    {
-      range: new monaco.Range(loc.line, 1, loc.line, 1),
-      options: {
-        isWholeLine: true,
-        className: 'active-template-line',
-        glyphMarginClassName: 'active-template-glyph'
-      }
-    }
-  ])
-  editorRef.value.revealLineInCenterIfOutsideViewport(loc.line)
+  highlightLocation(loc);
 })
 </script>
 

@@ -13,11 +13,11 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include "clang/Basic/Diagnostic.h"
 
 using namespace clang;
 using namespace clang::tooling;
 using namespace std;
-
 struct TraceNode {
     int id;
     int parentId;
@@ -26,6 +26,8 @@ struct TraceNode {
     long long dur;
     unsigned int line;
     unsigned int col;
+    bool failed;
+    std::string failReason;
 };
 
 struct TraceEvent {
@@ -36,6 +38,7 @@ struct TraceEvent {
 static std::vector<TraceNode> g_traceNodes;
 static std::vector<TraceEvent> g_events;
 static int g_nextNodeId = 1;
+static std::vector<int> g_activeNodes;
 
 class VisualizerTemplateCallback : public TemplateInstantiationCallback {
     struct StackEntry {
@@ -66,6 +69,7 @@ public:
         int id = g_nextNodeId++;
         int parentId = instStack.empty() ? 0 : instStack.back().id;
         instStack.push_back({id, getTimestamp()});
+        g_activeNodes.push_back(id);
         
         std::string detail = "Unknown";
         if (Inst.Entity) {
@@ -83,7 +87,7 @@ public:
             col = SM.getSpellingColumnNumber(Inst.PointOfInstantiation);
         }
 
-        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col});
+        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, ""});
         g_events.push_back({"Enter", id});
     }
 
@@ -101,9 +105,22 @@ public:
         if (!instStack.empty()) {
             auto top = instStack.back();
             instStack.pop_back();
+            if (!g_activeNodes.empty()) g_activeNodes.pop_back();
+            
+            bool isInvalid = false;
+            if (Inst.Entity && isa<Decl>(Inst.Entity)) {
+                if (dyn_cast<Decl>(Inst.Entity)->isInvalidDecl()) {
+                    isInvalid = true;
+                }
+            }
+
             for (auto &node : g_traceNodes) {
                 if (node.id == top.id) {
                     node.dur = getTimestamp() - top.start_ts;
+                    if (isInvalid) {
+                        node.failed = true;
+                        node.failReason = "SFINAE / Invalid Decl";
+                    }
                     break;
                 }
             }
@@ -179,6 +196,10 @@ public:
             nodeObj["dur"] = n.dur;
             nodeObj["line"] = n.line;
             nodeObj["col"] = n.col;
+            nodeObj["failed"] = n.failed;
+            if (n.failed) {
+                nodeObj["failReason"] = n.failReason;
+            }
             nodesArr.push_back(std::move(nodeObj));
         }
 
@@ -203,8 +224,49 @@ public:
     }
 };
 
+class ErrorTrappingDiagConsumer : public DiagnosticConsumer {
+    DiagnosticConsumer *Original;
+public:
+    ErrorTrappingDiagConsumer(DiagnosticConsumer *Original) : Original(Original) {}
+    
+    void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel, const Diagnostic &Info) override {
+        if (Original) Original->HandleDiagnostic(DiagLevel, Info);
+        
+        llvm::SmallString<100> OutStr;
+        Info.FormatDiagnostic(OutStr);
+        llvm::errs() << "[Diag] Level " << (int)DiagLevel << ": " << OutStr.c_str() << "\n";
+
+        if (DiagLevel >= DiagnosticsEngine::Note) {
+            if (!g_activeNodes.empty()) {
+                int topId = g_activeNodes.back();
+                for (auto &node : g_traceNodes) {
+                    if (node.id == topId) {
+                        node.failed = true;
+                        node.failReason = OutStr.c_str();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    void BeginSourceFile(const LangOptions &LO, const Preprocessor *PP) override {
+        if (Original) Original->BeginSourceFile(LO, PP);
+    }
+    void EndSourceFile() override {
+        if (Original) Original->EndSourceFile();
+    }
+};
+
 class VisualizerAction : public ASTFrontendAction {
 public:
+    bool BeginSourceFileAction(CompilerInstance &CI) override {
+        if (CI.hasDiagnostics()) {
+            DiagnosticConsumer *Original = CI.getDiagnostics().getClient();
+            CI.getDiagnostics().setClient(new ErrorTrappingDiagConsumer(Original), true);
+        }
+        return true;
+    }
+
     std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
         return std::make_unique<VisualizerASTConsumer>(CI);
     }
