@@ -24,24 +24,28 @@ console.log('3. Packaging Backend to Binary using pkg...');
 console.log('=======================================');
 // Install pkg locally in the backend folder
 execSync('npm install pkg --no-save', { cwd: backendDir, stdio: 'inherit' });
-// Run pkg to compile server.js into server.exe
-execSync('npx pkg dist/server.js --target node18-win-x64 --output server.exe', { cwd: backendDir, stdio: 'inherit' });
+// Run pkg to compile server.js into CppTemplateVisualizer.exe
+execSync('npx pkg dist/server.js --target node18-win-x64 --output CppTemplateVisualizer.exe', { cwd: backendDir, stdio: 'inherit' });
+
+console.log('Adding logo to executable...');
+execSync('npx resedit-cli --in CppTemplateVisualizer.exe --out CppTemplateVisualizer.exe --icon 1,../logo.ico', { cwd: backendDir, stdio: 'inherit' });
 
 console.log('\n=======================================');
 console.log('4. Creating Release Directory...');
 console.log('=======================================');
-if (fs.existsSync(releaseDir)) {
-    fs.rmSync(releaseDir, { recursive: true, force: true });
+if (!fs.existsSync(releaseDir)) {
+    fs.mkdirSync(releaseDir, { recursive: true });
 }
-fs.mkdirSync(releaseDir);
 
 console.log('Copying artifacts to release folder...');
-// Copy server binary
-fs.copyFileSync(path.join(backendDir, 'server.exe'), path.join(releaseDir, 'server.exe'));
+// Copy CppTemplateVisualizer binary
+fs.copyFileSync(path.join(backendDir, 'CppTemplateVisualizer.exe'), path.join(releaseDir, 'CppTemplateVisualizer.exe'));
 
 // Copy Visualizer plugin
 const pluginDir = path.join(releaseDir, 'plugin');
-fs.mkdirSync(pluginDir);
+if (!fs.existsSync(pluginDir)) {
+    fs.mkdirSync(pluginDir);
+}
 fs.copyFileSync(path.join(backendDir, 'plugin', 'Visualizer.exe'), path.join(pluginDir, 'Visualizer.exe'));
 
 // Copy clangd to the release package to remove external dependencies

@@ -15,7 +15,7 @@ const props = defineProps<{
     tree: any[]
 }>();
 
-const { fitView, setCenter } = useVueFlow();
+const { fitView, setCenter, onNodesInitialized } = useVueFlow();
 
 const nodes = ref<any[]>([]);
 const edges = ref<any[]>([]);
@@ -257,9 +257,7 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
     edges.value = currentEdges;
 }, { immediate: true });
 
-watch(() => props.currentIndex, () => {
-  // Only pan when stepping, not when selecting
-  setTimeout(() => {
+function centerOnCurrentStep() {
     const currentStepId = props.steps[props.currentIndex]?.id;
     if (currentStepId !== undefined) {
       const isCurrent = nodes.value.find(n => n.id === String(currentStepId));
@@ -269,6 +267,16 @@ watch(() => props.currentIndex, () => {
           fitView({ padding: 0.2, duration: 800 });
       }
     }
+}
+
+onNodesInitialized(() => {
+    centerOnCurrentStep();
+});
+
+watch(() => props.currentIndex, () => {
+  // Only pan when stepping, not when selecting
+  setTimeout(() => {
+    centerOnCurrentStep();
   }, 50);
 });
 
@@ -289,7 +297,7 @@ watch(() => props.currentIndex, () => {
       :max-zoom="4"
     >
       <Background pattern-color="#374151" :gap="20" />
-      <Controls />
+      <Controls :showInteractive="false" />
     </VueFlow>
 
     <!-- Node Info Tooltip -->

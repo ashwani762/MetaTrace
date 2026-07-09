@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, createApp } from 'vue'
-import DebuggerControls from './components/DebuggerControls.vue';
+
 import EditorPanel from './components/EditorPanel.vue';
 import GraphPanel from './components/GraphPanel.vue';
 import StackPanel from './components/StackPanel.vue';
 import VariablesPanel from './components/VariablesPanel.vue';
-
 import OutputPanel from './components/OutputPanel.vue';
+import ExplanationPanel from './components/ExplanationPanel.vue';
+import ScrubberPanel from './components/ScrubberPanel.vue';
 
 import { GoldenLayout, LayoutConfig, ResolvedLayoutConfig } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
@@ -16,12 +17,9 @@ import {
   standard, 
   isCompiling, 
   traceSteps, 
-  logicalStepIndex,
-  logicalMaxSteps,
-  compileCode,
-  stopCompile,
   resetVisualizer,
-  handleStep
+  compileCode,
+  stopCompile
 } from './store';
 
 const layoutContainer = ref<HTMLElement | null>(null);
@@ -39,14 +37,14 @@ const config: LayoutConfig = {
           {
             type: 'component',
             componentType: 'Editor',
-            title: 'main.cpp',
-            width: 40
+            title: 'Code Editor',
+            width: 30
           },
           {
             type: 'component',
             componentType: 'Graph',
             title: 'Instantiation Graph',
-            width: 60
+            width: 70
           }
         ]
       },
@@ -58,19 +56,25 @@ const config: LayoutConfig = {
             type: 'component',
             componentType: 'Output',
             title: 'Output',
-            width: 33
+            width: 20
           },
           {
             type: 'component',
             componentType: 'Stack',
             title: 'Call Stack',
-            width: 33
+            width: 20
           },
           {
             type: 'component',
             componentType: 'Variables',
             title: 'Variables',
-            width: 34
+            width: 25
+          },
+          {
+            type: 'component',
+            componentType: 'Explanation',
+            title: 'Steps & Explanations',
+            width: 35
           }
         ]
       }
@@ -146,6 +150,8 @@ const initLayout = (useSaved: boolean = true) => {
   register('Stack', StackPanel);
   register('Variables', VariablesPanel);
   register('Output', OutputPanel);
+  register('Explanation', ExplanationPanel);
+  register('Scrubber', ScrubberPanel);
 
   layout.init();
 };
@@ -186,11 +192,6 @@ onBeforeUnmount(() => {
             <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
             C++ Template Visualizer
           </h1>
-          <div class="flex items-center justify-between mt-1.5 opacity-0 transition-opacity duration-300" :class="{ 'opacity-100': logicalMaxSteps > 0 }">
-            <div class="w-full h-1 bg-gray-800 rounded-full overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-300 ease-out shadow-[0_0_8px_rgba(34,211,238,0.6)]" :style="{ width: logicalMaxSteps > 0 ? ((logicalStepIndex + 1) / logicalMaxSteps) * 100 + '%' : '0%' }"></div>
-            </div>
-          </div>
         </div>
         <div class="h-6 w-px bg-gray-700"></div>
         <select v-model="standard" class="bg-gray-800 border border-gray-700 text-sm rounded px-2 py-1 outline-none focus:border-blue-500">
@@ -233,10 +234,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
-        <DebuggerControls @step="handleStep" :canStep="traceSteps.length > 0" :stepIndex="logicalStepIndex" :maxSteps="logicalMaxSteps" />
-      </div>
-      
+
       <div class="flex items-center space-x-2">
 
         <button 

@@ -6,9 +6,21 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 
-const app = express();
-const port = process.env.PORT || 3001;
+let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 80;
+let host = '127.0.0.1';
 
+for (let i = 2; i < process.argv.length; i++) {
+    const arg = process.argv[i];
+    if (arg === '--port' || arg === '-p') {
+        port = parseInt(process.argv[++i], 10) || port;
+    } else if (arg === '--host' || arg === '-h') {
+        host = process.argv[++i] || host;
+    } else if (arg === '--expose') {
+        host = '0.0.0.0';
+    }
+}
+
+const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -118,8 +130,22 @@ app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(baseDir, 'public', 'index.html'));
 });
 
-const server = app.listen(port, () => {
-  console.log(`Backend server listening at http://localhost:${port}`);
+const server = app.listen(port, host, () => {
+  const url = `http://${host === '0.0.0.0' ? 'localhost' : host}${port === 80 ? '' : ':' + port}`;
+  const banner = `
+=============================================================
+  🚀 C++ Template Visualizer is running!
+=============================================================
+  Network UI:   ${url}
+  
+  Options used:
+    --port    ${port}
+    --host    ${host}
+    
+  (Use --help or -h for more options)
+=============================================================
+  `;
+  console.log(banner);
 });
 
 setupLSP(server, baseDir);

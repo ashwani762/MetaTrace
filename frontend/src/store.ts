@@ -119,6 +119,32 @@ export const activeLocation = computed(() => {
   }
   return undefined;
 });
+
+export const activeExplanation = computed(() => {
+  if (currentStepIndex.value < 0 || traceSteps.value.length === 0) {
+    return "Ready to trace.";
+  }
+  const step = traceSteps.value[currentStepIndex.value];
+  if (!step) return "";
+
+  if (step.type === 'begin') {
+    return `Evaluating \`${step.name}\``;
+  } else if (step.type === 'end') {
+    if (step.values && Object.keys(step.values).length > 0) {
+      const vals = Object.entries(step.values).map(([k, v]) => `${k} = ${v}`).join(', ');
+      return `Resolved \`${step.name}\` ➔ ${vals}`;
+    } else {
+      return `Resolved \`${step.name}\``;
+    }
+  }
+  return "";
+});
+
+export const setStepIndex = (index: number) => {
+  if (index >= -1 && index < traceSteps.value.length) {
+    currentStepIndex.value = index;
+  }
+};
 let currentAbortController: AbortController | null = null;
 
 export const stopCompile = () => {
@@ -150,7 +176,7 @@ export const compileCode = async () => {
   currentAbortController = new AbortController();
 
   try {
-    const res = await fetch('http://localhost:3001/api/compile', {
+    const res = await fetch('/api/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: code.value, standard: standard.value }),
@@ -262,7 +288,7 @@ export const compileCode = async () => {
 
         traceSteps.value = steps;
         treeData.value = tree;
-        currentStepIndex.value = -1;
+        currentStepIndex.value = steps.length > 0 ? 0 : -1;
         
         // Store values in a global map for Variables panel if needed
         (window as any).__TRACE_VALUES__ = data.values || {};

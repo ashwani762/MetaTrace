@@ -18,7 +18,7 @@ afterAll(() => {
     }
 });
 
-function runVisualizer(code: string): any {
+function runVisualizer(code: string, std: string = 'c++17'): any {
     const testId = Math.random().toString(36).substring(7);
     const cppFile = path.join(TEST_TMP_DIR, `test_${testId}.cpp`);
     const traceFile = path.join(TEST_TMP_DIR, `trace_custom.json`);
@@ -32,7 +32,7 @@ function runVisualizer(code: string): any {
     
     // Run Visualizer.exe (the trace is generated in the current working directory of the process)
     try {
-        execSync(`"${PLUGIN_BIN}" "${cppFile}" -- -std=c++17`, { cwd: TEST_TMP_DIR });
+        execSync(`"${PLUGIN_BIN}" "${cppFile}" -- -std=${std}`, { cwd: TEST_TMP_DIR });
     } catch (e) {
         // Visualizer might return non-zero if there are compiler errors, but still generate trace
     }
@@ -91,5 +91,72 @@ describe('Visualizer Clang Plugin', () => {
         // We expect to see "Min<5, 2>" as the class instantiation detail
         const hasNttpArgs = trace.nodes.some((n: any) => n.detail.includes('Min<5, 2>'));
         expect(hasNttpArgs).toBe(true);
+    });
+
+    test('supports C++14 SFINAE with std::enable_if_t', () => {
+        const code = `
+            #include <type_traits>
+
+            template <typename T>
+            std::enable_if_t<std::is_integral<T>::value, T> 
+            process(T val) { return val * 2; }
+
+            template <typename T>
+            std::enable_if_t<std::is_floating_point<T>::value, T> 
+            process(T val) { return val / 2.0; }
+
+            int main() {
+                process(5);
+                process(3.14);
+                return 0;
+            }
+        `;
+        const trace = runVisualizer(code, 'c++14');
+        expect(trace).not.toBeNull();
+        expect(trace.nodes).toBeDefined();
+        
+        const hasIntProcess = trace.nodes.some((n: any) => n.detail.includes('process<int>'));
+        const hasDoubleProcess = trace.nodes.some((n: any) => n.detail.includes('process<double>'));
+        expect(hasIntProcess).toBe(true);
+        expect(hasDoubleProcess).toBe(true);
+    });
+
+    test('supports C++17 fold expressions (Variadic Templates)', () => {
+        const code = `
+            template<typename... Args>
+            int sum(Args... args) {
+                return (... + args);
+            }
+
+            int main() {
+                return sum(1, 2, 3);
+            }
+        `;
+        const trace = runVisualizer(code, 'c++17');
+        expect(trace).not.toBeNull();
+        expect(trace.nodes).toBeDefined();
+        const hasVariadic = trace.nodes.some((n: any) => n.detail.includes('sum<int, int, int>'));
+        expect(hasVariadic).toBe(true);
+    });
+
+    test('supports C++20 concepts and constraints', () => {
+        const code = `
+            template <typename T>
+            concept Integral = __is_integral(T);
+
+            template <Integral T>
+            T add(T a, T b) { return a + b; }
+
+            int main() {
+                add(5, 10);
+                return 0;
+            }
+        `;
+        const trace = runVisualizer(code, 'c++20');
+        expect(trace).not.toBeNull();
+        expect(trace.nodes).toBeDefined();
+        
+        const hasConceptMatch = trace.nodes.some((n: any) => n.detail.includes('add<int>'));
+        expect(hasConceptMatch).toBe(true);
     });
 });

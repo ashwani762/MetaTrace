@@ -53,6 +53,10 @@ public:
     void initialize(const Sema &TheSema) override {}
     void finalize(const Sema &TheSema) override {}
     void atTemplateBegin(const Sema &TheSema, const Sema::CodeSynthesisContext &Inst) override {
+        SourceManager &SM = TheSema.getSourceManager();
+        if (!SM.isInMainFile(Inst.PointOfInstantiation)) {
+            return;
+        }
         if (Inst.Entity) {
             if (auto *ND = dyn_cast<NamedDecl>(Inst.Entity)) {
                 if (isa<VarDecl>(ND) || isa<VarTemplateSpecializationDecl>(ND)) return;
@@ -73,7 +77,6 @@ public:
             }
         }
         
-        SourceManager &SM = TheSema.getSourceManager();
         unsigned int line = 0, col = 0;
         if (Inst.PointOfInstantiation.isValid()) {
             line = SM.getSpellingLineNumber(Inst.PointOfInstantiation);
@@ -85,6 +88,10 @@ public:
     }
 
     void atTemplateEnd(const Sema &TheSema, const Sema::CodeSynthesisContext &Inst) override {
+        SourceManager &SM = TheSema.getSourceManager();
+        if (!SM.isInMainFile(Inst.PointOfInstantiation)) {
+            return;
+        }
         if (Inst.Entity) {
             if (auto *ND = dyn_cast<NamedDecl>(Inst.Entity)) {
                 if (isa<VarDecl>(ND) || isa<VarTemplateSpecializationDecl>(ND)) return;
@@ -155,7 +162,12 @@ public:
     void HandleTranslationUnit(ASTContext &Context) override {
         llvm::json::Object ValuesMap;
         EvaluatedValueVisitor Visitor(&Context, ValuesMap);
-        Visitor.TraverseDecl(Context.getTranslationUnitDecl());
+        SourceManager &SM = Context.getSourceManager();
+        for (auto *D : Context.getTranslationUnitDecl()->decls()) {
+            if (SM.isInMainFile(D->getLocation())) {
+                Visitor.TraverseDecl(D);
+            }
+        }
 
         llvm::json::Array nodesArr;
         for (const auto &n : g_traceNodes) {

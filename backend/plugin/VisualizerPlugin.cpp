@@ -51,6 +51,11 @@ public:
     void finalize(const Sema &TheSema) override {}
 
     void atTemplateBegin(const Sema &TheSema, const Sema::CodeSynthesisContext &Inst) override {
+        SourceManager &SM = TheSema.getSourceManager();
+        if (!SM.isInMainFile(Inst.PointOfInstantiation)) {
+            return;
+        }
+
         int id = g_nextNodeId++;
         int parentId = instStack.empty() ? 0 : instStack.back().id;
         instStack.push_back({id, getTimestamp()});
@@ -86,6 +91,11 @@ public:
     }
 
     void atTemplateEnd(const Sema &TheSema, const Sema::CodeSynthesisContext &Inst) override {
+        SourceManager &SM = TheSema.getSourceManager();
+        if (!SM.isInMainFile(Inst.PointOfInstantiation)) {
+            return;
+        }
+
         if (!instStack.empty()) {
             auto top = instStack.back();
             instStack.pop_back();
