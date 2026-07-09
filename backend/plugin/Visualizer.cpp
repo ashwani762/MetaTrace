@@ -115,13 +115,6 @@ public:
             if (Inst.Entity && isa<Decl>(Inst.Entity)) {
                 if (auto *D = dyn_cast<Decl>(Inst.Entity)) {
                     if (D->isInvalidDecl()) isInvalid = true;
-                    llvm::errs() << "[DEBUG] atTemplateEnd entity kind: " << D->getDeclKindName() << "\n";
-                    if (auto *ND = dyn_cast<NamedDecl>(D)) {
-                        llvm::errs() << "[DEBUG] NamedDecl: " << ND->getQualifiedNameAsString() << "\n";
-                    }
-                    if (auto *TAD = dyn_cast<TypeAliasDecl>(D)) {
-                        llvm::errs() << "[DEBUG] TypeAliasDecl underlying: " << TAD->getUnderlyingType().getAsString() << "\n";
-                    }
                 }
             }
 
