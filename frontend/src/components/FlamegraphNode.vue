@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { computed, inject } from 'vue';
+import type { Ref } from 'vue';
 
 const props = defineProps<{
     node: any;
@@ -14,6 +15,13 @@ const props = defineProps<{
 }>();
 
 const setZoomedNode = inject('setZoomedNode') as ((node: any) => void) | undefined;
+const isBottomUp = inject('isBottomUp') as Ref<boolean>;
+const searchQuery = inject('searchQuery') as Ref<string>;
+
+const isSearchMatch = computed(() => {
+    if (!searchQuery?.value) return false;
+    return props.node.name?.toLowerCase().includes(searchQuery.value.toLowerCase());
+});
 
 const onClick = (e: MouseEvent) => {
     e.stopPropagation(); // don't zoom out or up to parent
@@ -64,11 +72,17 @@ const unrecordedPercent = computed(() => {
 
 <template>
   <div 
-    class="flex flex-col overflow-hidden" 
+    class="flex overflow-hidden"
+    :class="isBottomUp ? 'flex-col-reverse justify-end' : 'flex-col'" 
     :style="{ width: `${widthPercent}%`, minWidth: '1px' }"
   >
     <div 
-      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs text-white border-r border-b border-[#1e1e1e] cursor-pointer transition-colors"
+      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs text-white border-r border-[#1e1e1e] cursor-pointer transition-colors"
+      :class="{
+        'border-b': !isBottomUp,
+        'border-t': isBottomUp,
+        'ring-2 ring-yellow-400 ring-inset z-10': isSearchMatch
+      }"
       :style="{ backgroundColor: bgColor }"
       :title="`${node.name}\nTotal: ${(node.dur / 1000).toFixed(3)} ms`"
       @click="onClick"

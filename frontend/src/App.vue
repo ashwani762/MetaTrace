@@ -31,6 +31,7 @@ import {
 } from './store';
 
 const layoutContainer = ref<HTMLElement | null>(null);
+const showThankYou = ref(false);
 let layout: GoldenLayout | null = null;
 const appInstances: ReturnType<typeof createApp>[] = [];
 
@@ -308,6 +309,15 @@ onBeforeUnmount(() => {
         </div>
 
         <button 
+          @click="showThankYou = true"
+          class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors mr-2"
+          title="Acknowledgments & Licenses"
+        >
+          <svg class="w-4 h-4 mr-1.5 text-pink-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          Thank You
+        </button>
+
+        <button 
           @click="resetLayout"
           class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors"
           title="Reset Window Layout"
@@ -320,6 +330,68 @@ onBeforeUnmount(() => {
 
     <!-- Golden Layout Container -->
     <main ref="layoutContainer" class="flex-1 w-full relative"></main>
+
+    <!-- Thank You Modal -->
+    <div v-if="showThankYou" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col text-gray-200">
+        <div class="flex justify-between items-center p-4 border-b border-gray-700">
+          <h2 class="text-xl font-bold flex items-center">
+            <svg class="w-6 h-6 mr-2 text-pink-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            Acknowledgments
+          </h2>
+          <button @click="showThankYou = false" class="text-gray-400 hover:text-white transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-1 space-y-6">
+          <p class="text-sm text-gray-400">MetaTrace is made possible thanks to the incredible open-source work of many developers and organizations. Thank you to the authors and maintainers of the following projects:</p>
+          
+          <div class="space-y-4">
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-blue-400 text-lg">LLVM Project (Clang)</h3>
+              <p class="text-sm mt-1 mb-2">Provides the foundational compiler frontend technology used to accurately trace C++ templates.</p>
+              <div class="text-xs text-gray-500 font-mono">License: Apache 2.0 with LLVM Exceptions</div>
+            </div>
+
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-green-400 text-lg">Vue.js & Vite</h3>
+              <p class="text-sm mt-1 mb-2">The incredibly fast, progressive JavaScript framework and build tool powering this interface.</p>
+              <div class="text-xs text-gray-500 font-mono">License: MIT License</div>
+            </div>
+
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-blue-300 text-lg">Monaco Editor</h3>
+              <p class="text-sm mt-1 mb-2">The powerful code editor from Microsoft that drives VS Code, providing syntax highlighting and editing in MetaTrace.</p>
+              <div class="text-xs text-gray-500 font-mono">License: MIT License</div>
+            </div>
+
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-purple-400 text-lg">Vue Flow & Dagre</h3>
+              <p class="text-sm mt-1 mb-2">Provides the interactive, node-based flowchart visualization and the automatic layout engine.</p>
+              <div class="text-xs text-gray-500 font-mono">License: MIT License</div>
+            </div>
+            
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-yellow-400 text-lg">Golden Layout</h3>
+              <p class="text-sm mt-1 mb-2">Provides the robust, drag-and-drop window management and docking system.</p>
+              <div class="text-xs text-gray-500 font-mono">License: MIT License</div>
+            </div>
+            
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-teal-400 text-lg">Tailwind CSS</h3>
+              <p class="text-sm mt-1 mb-2">The utility-first CSS framework that makes styling this application simple and beautiful.</p>
+              <div class="text-xs text-gray-500 font-mono">License: MIT License</div>
+            </div>
+
+            <div class="bg-gray-900 p-4 rounded border border-gray-700">
+              <h3 class="font-bold text-gray-300 text-lg">Express.js & pkg</h3>
+              <p class="text-sm mt-1 mb-2">Powering the backend API server and bundling the entire application into a single executable.</p>
+              <div class="text-xs text-gray-500 font-mono">License: MIT License</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Notification Popup -->
     <transition enter-active-class="transition ease-out duration-300" enter-from-class="transform translate-y-2 opacity-0" enter-to-class="transform translate-y-0 opacity-100" leave-active-class="transition ease-in duration-200" leave-from-class="transform translate-y-0 opacity-100" leave-to-class="transform translate-y-2 opacity-0">
