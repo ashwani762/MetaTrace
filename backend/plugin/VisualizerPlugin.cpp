@@ -29,6 +29,7 @@ struct TraceNode {
     long long ts;
     long long dur;
     int kind;
+    std::string desugaredCode;
 };
 
 struct TraceEvent {
@@ -92,7 +93,7 @@ public:
             }
         }
         
-        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, (int)Inst.Kind});
+        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, (int)Inst.Kind, ""});
         g_events.push_back({"Enter", id});
     }
 
@@ -105,9 +106,21 @@ public:
         if (!instStack.empty()) {
             auto top = instStack.back();
             instStack.pop_back();
+            
+            std::string codeStr = "";
+            if (Inst.Entity && isa<Decl>(Inst.Entity)) {
+                if (auto *D = dyn_cast<Decl>(Inst.Entity)) {
+                    if (Inst.Kind == Sema::CodeSynthesisContext::TemplateInstantiation) {
+                        llvm::raw_string_ostream OS(codeStr);
+                        D->print(OS, D->getASTContext().getPrintingPolicy());
+                    }
+                }
+            }
+
             for (auto &node : g_traceNodes) {
                 if (node.id == top.id) {
                     node.dur = getTimestamp() - top.start_ts;
+                    node.desugaredCode = codeStr;
                     break;
                 }
             }
@@ -173,6 +186,9 @@ public:
             nodeObj["ts"] = n.ts;
             nodeObj["dur"] = n.dur;
             nodeObj["kind"] = n.kind;
+            if (!n.desugaredCode.empty()) {
+                nodeObj["desugaredCode"] = n.desugaredCode;
+            }
             nodesArr.push_back(std::move(nodeObj));
         }
 

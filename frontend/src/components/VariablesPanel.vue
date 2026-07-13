@@ -23,9 +23,11 @@ import { activeVariables, activeTypeAliases } from '../store';
             </tr>
           </thead>
           <tbody>
-            <tr v-for="variable in activeVariables" :key="variable.name" class="border-b border-gray-800/50 hover:bg-gray-800/50">
-              <td class="px-2 py-1.5 text-purple-400 whitespace-nowrap">{{ variable.name }}</td>
-              <td class="px-2 py-1.5 text-blue-300 break-all">{{ variable.value }}</td>
+            <tr v-for="variable in activeVariables" :key="variable.name" 
+                class="border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors"
+                :class="variable.changed ? 'bg-indigo-900/40 border-l-2 border-indigo-500' : ''">
+              <td class="px-2 py-1.5 whitespace-nowrap" :class="variable.changed ? 'text-indigo-300 font-bold' : 'text-purple-400'">{{ variable.name }}</td>
+              <td class="px-2 py-1.5 break-all" :class="variable.changed ? 'text-indigo-200' : 'text-blue-300'">{{ variable.value }}</td>
             </tr>
           </tbody>
         </table>

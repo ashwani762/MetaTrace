@@ -16,6 +16,7 @@ import ExplanationPanel from './components/ExplanationPanel.vue';
 import ScrubberPanel from './components/ScrubberPanel.vue';
 import FlamegraphPanel from './components/FlamegraphPanel.vue';
 import TypeResolutionPanel from './components/TypeResolutionPanel.vue';
+import DesugaredCodePanel from './components/DesugaredCodePanel.vue';
 
 import { GoldenLayout, LayoutConfig, ResolvedLayoutConfig } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
@@ -43,7 +44,8 @@ const visiblePanels = ref({
   Stack: false,
   Variables: false,
   Flamegraph: false,
-  TypeResolution: false
+  TypeResolution: false,
+  DesugaredCode: true
 });
 
 const showViewMenu = ref(false);
@@ -62,6 +64,7 @@ const generateConfig = (): LayoutConfig => {
   if (visiblePanels.value.Explanation) rightBottom.push({ type: 'component', componentType: 'Explanation', title: 'Steps & Explanations' });
   if (visiblePanels.value.Flamegraph) rightBottom.push({ type: 'component', componentType: 'Flamegraph', title: 'Flamegraph' });
   if (visiblePanels.value.TypeResolution) rightBottom.push({ type: 'component', componentType: 'TypeResolution', title: 'Type Resolution' });
+  if (visiblePanels.value.DesugaredCode) rightBottom.push({ type: 'component', componentType: 'DesugaredCode', title: 'Desugared C++' });
 
   const rightCol = [];
   if (rightTop.length > 0) rightCol.push({ type: 'row', height: rightBottom.length > 0 ? 70 : 100, content: rightTop });
@@ -166,6 +169,7 @@ const initLayout = (useSaved: boolean = true) => {
   register('Scrubber', ScrubberPanel);
   register('Flamegraph', FlamegraphPanel);
   register('TypeResolution', TypeResolutionPanel);
+  register('DesugaredCode', DesugaredCodePanel);
 
   layout.addEventListener('itemDestroyed', (ev: any) => {
     if (isLayoutInitializing) return;
@@ -179,7 +183,8 @@ const initLayout = (useSaved: boolean = true) => {
         'Variables': 'Variables',
         'Explanation': 'Explanation',
         'Flamegraph': 'Flamegraph',
-        'TypeResolution': 'TypeResolution'
+        'TypeResolution': 'TypeResolution',
+        'DesugaredCode': 'DesugaredCode'
       };
       const panelKey = mapComponentToPanel[compName];
       if (panelKey && visiblePanels.value[panelKey as keyof typeof visiblePanels.value]) {
@@ -203,7 +208,8 @@ const resetLayout = () => {
     Stack: false,
     Variables: false,
     Flamegraph: false,
-    TypeResolution: false
+    TypeResolution: false,
+    DesugaredCode: true
   };
   initLayout(false);
   showNotification('Layout reset to default!');

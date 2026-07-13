@@ -11,7 +11,8 @@ import { SimpleLspClient } from '../lspClient'
 
 const props = defineProps<{
   modelValue: string,
-  activeLocation?: { line: number, col: number }
+  activeLocation?: { line: number, col: number },
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -67,7 +68,8 @@ onMounted(() => {
     fontFamily: 'JetBrains Mono, Consolas, monospace',
     scrollBeyondLastLine: false,
     roundedSelection: false,
-    padding: { top: 16 }
+    padding: { top: 16 },
+    readOnly: props.readOnly || false
   });
   
   editorRef.value = editor;

@@ -38,6 +38,7 @@ struct TraceNode {
     std::string failReason;
     bool isAlias;
     int kind;
+    std::string desugaredCode;
 };
 
 struct TraceEvent {
@@ -100,7 +101,7 @@ public:
             col = SM.getSpellingColumnNumber(Inst.PointOfInstantiation);
         }
 
-        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, "", isAlias, (int)Inst.Kind});
+        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, "", isAlias, (int)Inst.Kind, ""});
         g_events.push_back({"Enter", id});
     }
 
@@ -121,15 +122,21 @@ public:
             if (!g_activeNodes.empty()) g_activeNodes.pop_back();
             
             bool isInvalid = false;
+            std::string codeStr = "";
             if (Inst.Entity && isa<Decl>(Inst.Entity)) {
                 if (auto *D = dyn_cast<Decl>(Inst.Entity)) {
                     if (D->isInvalidDecl()) isInvalid = true;
+                    if (Inst.Kind == Sema::CodeSynthesisContext::TemplateInstantiation) {
+                        llvm::raw_string_ostream OS(codeStr);
+                        D->print(OS, D->getASTContext().getPrintingPolicy());
+                    }
                 }
             }
 
             for (auto &node : g_traceNodes) {
                 if (node.id == top.id) {
                     node.dur = getTimestamp() - top.start_ts;
+                    node.desugaredCode = codeStr;
                     if (isInvalid) {
                         node.failed = true;
                         node.failReason = "SFINAE / Invalid Decl";
@@ -232,6 +239,9 @@ public:
             nodeObj["failed"] = n.failed;
             nodeObj["isAlias"] = n.isAlias;
             nodeObj["kind"] = n.kind;
+            if (!n.desugaredCode.empty()) {
+                nodeObj["desugaredCode"] = n.desugaredCode;
+            }
             if (n.failed) {
                 nodeObj["failReason"] = n.failReason;
             }

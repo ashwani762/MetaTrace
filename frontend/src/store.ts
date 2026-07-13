@@ -77,18 +77,31 @@ export const activeStack = computed(() => {
 export const activeVariables = computed(() => {
   const stack = activeStack.value;
   if (stack.length === 0) return [];
-  const current = stack[0]; 
-  
-  const vars = [];
-  const name = current.name;
-  const match = name.match(/^([^<]+)<(.+)>$/);
-  
-  if (!match) {
-    vars.push({ name: 'Frame', value: name });
-  } else {
-    const argsStr = match[2];
-    const args = [];
+  const current = stack[0];
+  const parent = stack.length > 1 ? stack[1] : null;
+
+  const parseArgs = (name: string) => {
+    if (!name.endsWith('>')) return null;
+    
     let depth = 0;
+    let matchIndex = -1;
+    for (let i = name.length - 1; i >= 0; i--) {
+      if (name[i] === '>') depth++;
+      else if (name[i] === '<') {
+        depth--;
+        if (depth === 0) {
+          matchIndex = i;
+          break;
+        }
+      }
+    }
+    
+    if (matchIndex === -1) return null;
+    
+    const base = name.substring(0, matchIndex).trim();
+    const argsStr = name.substring(matchIndex + 1, name.length - 1);
+    const args = [];
+    depth = 0;
     let currentArg = '';
     for (let i = 0; i < argsStr.length; i++) {
       const c = argsStr[i];
@@ -102,14 +115,30 @@ export const activeVariables = computed(() => {
       currentArg += c;
     }
     if (currentArg.trim()) args.push(currentArg.trim());
-    args.forEach((arg, idx) => vars.push({ name: `Arg ${idx + 1}`, value: arg }));
+    return { base, args };
+  };
+
+  const vars = [];
+  const currParsed = parseArgs(current.name);
+  const parentParsed = parent ? parseArgs(parent.name) : null;
+
+  if (!currParsed) {
+    vars.push({ name: 'Frame', value: current.name, changed: false });
+  } else {
+    currParsed.args.forEach((arg, idx) => {
+      let changed = false;
+      if (parentParsed && parentParsed.base === currParsed.base) {
+        if (idx >= parentParsed.args.length || parentParsed.args[idx] !== arg) {
+          changed = true;
+        }
+      }
+      vars.push({ name: `Arg ${idx + 1}`, value: arg, changed });
+    });
   }
 
-  // Only show computed values if we are returning (end step) or if they are already computed.
-  // We can just show them on the 'end' step to simulate "returning".
   if (current.type === 'end' && current.values) {
     for (const key of Object.keys(current.values)) {
-      vars.push({ name: `[return] ${key}`, value: current.values[key] });
+      vars.push({ name: `[return] ${key}`, value: current.values[key], changed: false });
     }
   }
 
@@ -232,6 +261,9 @@ export const compileCode = async () => {
               existing.failed = true;
               existing.failReason = node.failReason;
             }
+            if (node.desugaredCode) {
+              existing.desugaredCode = node.desugaredCode;
+            }
           } else {
             firstSeen.set(node.detail, node);
             remap.set(node.id, node.id);
@@ -288,7 +320,8 @@ export const compileCode = async () => {
             failed: nodeObj.failed,
             failReason: nodeObj.failReason,
             isAlias: nodeObj.isAlias,
-            kind: nodeObj.kind
+            kind: nodeObj.kind,
+            desugaredCode: nodeObj.desugaredCode
           });
         });
 
@@ -305,6 +338,7 @@ export const compileCode = async () => {
             failed: n.failed,
             failReason: n.failReason,
             isAlias: n.isAlias,
+            desugaredCode: n.desugaredCode,
             children: [],
             values: steps.find(s => s.id === n.id)?.values || {}
           });

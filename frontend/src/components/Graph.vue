@@ -36,7 +36,8 @@ const LEGEND_ITEMS = [
     { label: 'Template (Completed)', colors: THEME.normalFinished },
     { label: 'Type Alias (Active)', colors: THEME.aliasCurrent },
     { label: 'Type Alias (In Progress)', colors: THEME.aliasActive },
-    { label: 'Type Alias (Completed)', colors: THEME.aliasFinished }
+    { label: 'Type Alias (Completed)', colors: THEME.aliasFinished },
+    { label: 'Declaration / Overload', colors: { bg: THEME.normalFinished.bg, border: THEME.normalFinished.border }, style: 'dashed' }
 ];
 const props = defineProps<{
     steps: any[],
@@ -491,13 +492,12 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
         if (finishedIds.has(nodeData.id) && nodeData.value !== undefined) {
             labelText += ` = ${nodeData.value}`;
         }
-
         const isFinished = finishedIds.has(nodeData.id);
 
         let bgColor = THEME.normalDefault.bg;
         let borderColor = THEME.normalDefault.border;
-        let shadow = 'none';
-        let borderStyle = 'solid';
+        let shadow = '0 1px 3px rgba(0,0,0,0.3)';
+        let borderStyle = (nodeData.kind === 3 || nodeData.kind === 4) ? 'dashed' : 'solid';
 
         if (isSelected) {
             bgColor = THEME.selected.bg;
@@ -613,13 +613,55 @@ onNodesInitialized(() => {
     centerOnCurrentStep();
 });
 
-watch(() => props.currentIndex, () => {
+function updateHighlights() {
+    const targetId = hoveredNodeId.value || selectedNodeId.value;
+    if (!targetId) {
+        nodes.value.forEach(n => {
+            if (n.style) n.style.opacity = 1.0;
+        });
+        edges.value.forEach(e => {
+            if (e.style) {
+                e.style.opacity = 1.0;
+                e.style.stroke = e.animated ? '#60a5fa' : '#9ca3af';
+            }
+        });
+        return;
+    }
+
+    const path = new Set<string>();
+    let curr = targetId;
+    while (curr) {
+        path.add(curr);
+        const edge = edges.value.find(e => e.target === curr);
+        if (edge) curr = edge.source;
+        else break;
+    }
+
+    nodes.value.forEach(n => {
+        if (n.style) {
+            n.style.opacity = path.has(n.id) ? 1.0 : 0.2;
+        }
+    });
+
+    edges.value.forEach(e => {
+        if (e.style) {
+            const inPath = path.has(e.source) && path.has(e.target);
+            e.style.opacity = inPath ? 1.0 : 0.15;
+            e.style.stroke = inPath ? (e.animated ? '#60a5fa' : '#93c5fd') : '#4b5563';
+        }
+    });
+}
+
+watch([hoveredNodeId, selectedNodeId, nodes], () => {
+    updateHighlights();
+}, { deep: true });
+
+watch(() => [props.steps, props.currentIndex, props.tree], () => {
   // Only pan when stepping, not when selecting
   setTimeout(() => {
     centerOnCurrentStep();
   }, 50);
 });
-
 
 const graphContainer = ref<HTMLElement | null>(null);
 let resizeObserver: ResizeObserver | null = null;
@@ -662,14 +704,22 @@ onUnmounted(() => {
     </div>
 
     <!-- Bottom-Right Legend overlay -->
-    <div class="absolute bottom-4 right-4 z-10 bg-gray-900/90 backdrop-blur-sm border border-gray-700 p-3 rounded-lg shadow-xl text-xs font-medium text-gray-300">
-      <div class="mb-2 text-gray-400 font-semibold border-b border-gray-700 pb-1">Legend</div>
-      <div class="grid grid-cols-2 gap-x-4 gap-y-2">
-        <div v-for="item in LEGEND_ITEMS" :key="item.label" class="flex items-center">
-            <div class="w-3 h-3 rounded mr-2 border" :style="{ background: item.colors.bg, borderColor: item.colors.border }"></div>
-            {{ item.label }}
+    <div class="absolute bottom-4 right-4 z-10">
+        <div class="mt-4 bg-gray-900/80 p-3 rounded-lg border border-gray-700 shadow-xl backdrop-blur-sm max-w-sm pointer-events-auto">
+            <h3 class="text-sm font-bold text-gray-300 mb-2 border-b border-gray-700 pb-1 flex items-center">
+                <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Legend
+            </h3>
+            <div class="grid grid-cols-1 gap-1.5">
+                <div v-for="(item, idx) in LEGEND_ITEMS" :key="idx" class="flex items-center text-xs text-gray-300">
+                    <div class="w-4 h-4 rounded-sm mr-2 flex-shrink-0" :style="{
+                        background: item.colors.bg,
+                        border: `2px ${item.style || 'solid'} ${item.colors.border}`
+                    }"></div>
+                    {{ item.label }}
+                </div>
+            </div>
         </div>
-      </div>
     </div>
 
     <VueFlow
