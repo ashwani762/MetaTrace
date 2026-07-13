@@ -678,6 +678,8 @@ onMounted(() => {
   }
 });
 
+const isLegendExpanded = ref(false);
+
 onUnmounted(() => {
   if (resizeObserver) {
     resizeObserver.disconnect();
@@ -705,12 +707,15 @@ onUnmounted(() => {
 
     <!-- Bottom-Right Legend overlay -->
     <div class="absolute bottom-4 right-4 z-10">
-        <div class="mt-4 bg-gray-900/80 p-3 rounded-lg border border-gray-700 shadow-xl backdrop-blur-sm max-w-sm pointer-events-auto">
-            <h3 class="text-sm font-bold text-gray-300 mb-2 border-b border-gray-700 pb-1 flex items-center">
-                <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                Legend
+        <div class="mt-4 bg-gray-900/80 p-3 rounded-lg border border-gray-700 shadow-xl backdrop-blur-sm max-w-sm pointer-events-auto transition-all duration-300">
+            <h3 @click="isLegendExpanded = !isLegendExpanded" class="text-sm font-bold text-gray-300 flex items-center justify-between cursor-pointer hover:text-white group" :class="{ 'mb-1 border-b border-gray-700 pb-1': isLegendExpanded, 'mb-0': !isLegendExpanded }">
+                <div class="flex items-center">
+                    <svg class="w-4 h-4 mr-1.5 text-gray-400 group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Legend
+                </div>
+                <svg class="w-4 h-4 text-gray-500 transition-transform duration-200" :class="{ 'rotate-180': isLegendExpanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </h3>
-            <div class="grid grid-cols-1 gap-1.5">
+            <div v-show="isLegendExpanded" class="grid grid-cols-1 gap-1.5 mt-2">
                 <div v-for="(item, idx) in LEGEND_ITEMS" :key="idx" class="flex items-center text-xs text-gray-300">
                     <div class="w-4 h-4 rounded-sm mr-2 flex-shrink-0" :style="{
                         background: item.colors.bg,
