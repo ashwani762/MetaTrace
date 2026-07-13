@@ -28,6 +28,7 @@ struct TraceNode {
     std::string detail;
     long long ts;
     long long dur;
+    int kind;
 };
 
 struct TraceEvent {
@@ -91,7 +92,7 @@ public:
             }
         }
         
-        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0});
+        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, (int)Inst.Kind});
         g_events.push_back({"Enter", id});
     }
 
@@ -171,6 +172,7 @@ public:
             nodeObj["detail"] = n.detail;
             nodeObj["ts"] = n.ts;
             nodeObj["dur"] = n.dur;
+            nodeObj["kind"] = n.kind;
             nodesArr.push_back(std::move(nodeObj));
         }
 

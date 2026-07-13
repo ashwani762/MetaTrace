@@ -26,6 +26,16 @@ watch(() => currentSteps.value.length, async () => {
 function formatName(name: string) {
   return name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+function getKindExplanation(kind: number | undefined) {
+  if (kind === undefined) return null;
+  switch (kind) {
+    case 0: return "Instantiating function/class definition (body)";
+    case 3: 
+    case 4: return "Substituting arguments for overload resolution / signature check";
+    default: return null;
+  }
+}
 </script>
 
 <template>
@@ -45,11 +55,16 @@ function formatName(name: string) {
           : 'bg-gray-900/50 border-gray-700 text-gray-400 opacity-70'
       ]"
     >
-      <div v-if="step.type === 'begin'" class="flex items-start">
-        <span class="text-blue-400 font-bold mr-2">▶</span>
-        <span>
-          Evaluating <span class="text-purple-300 italic" v-html="formatName(step.name)"></span>
-        </span>
+      <div v-if="step.type === 'begin'" class="flex flex-col">
+        <div class="flex items-start">
+          <span class="text-blue-400 font-bold mr-2">▶</span>
+          <span>
+            Evaluating <span class="text-purple-300 italic" v-html="formatName(step.name)"></span>
+          </span>
+        </div>
+        <div v-if="getKindExplanation(step.kind)" class="ml-5 mt-1 text-xs text-gray-500 italic">
+          // {{ getKindExplanation(step.kind) }}
+        </div>
       </div>
 
       <div v-else-if="step.type === 'end'" class="flex items-start">

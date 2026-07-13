@@ -287,7 +287,8 @@ export const compileCode = async () => {
             col: nodeObj.col,
             failed: nodeObj.failed,
             failReason: nodeObj.failReason,
-            isAlias: nodeObj.isAlias
+            isAlias: nodeObj.isAlias,
+            kind: nodeObj.kind
           });
         });
 

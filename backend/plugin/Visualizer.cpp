@@ -37,6 +37,7 @@ struct TraceNode {
     bool failed;
     std::string failReason;
     bool isAlias;
+    int kind;
 };
 
 struct TraceEvent {
@@ -99,7 +100,7 @@ public:
             col = SM.getSpellingColumnNumber(Inst.PointOfInstantiation);
         }
 
-        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, "", isAlias});
+        g_traceNodes.push_back({id, parentId, detail, getTimestamp(), 0, line, col, false, "", isAlias, (int)Inst.Kind});
         g_events.push_back({"Enter", id});
     }
 
@@ -230,6 +231,7 @@ public:
             nodeObj["col"] = n.col;
             nodeObj["failed"] = n.failed;
             nodeObj["isAlias"] = n.isAlias;
+            nodeObj["kind"] = n.kind;
             if (n.failed) {
                 nodeObj["failReason"] = n.failReason;
             }
