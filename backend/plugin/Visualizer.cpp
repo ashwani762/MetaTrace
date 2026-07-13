@@ -188,13 +188,13 @@ public:
 
     bool VisitTypeAliasDecl(TypeAliasDecl *TD) {
         std::string typeStr = TD->getUnderlyingType().getAsString();
-        ValuesMap[TD->getNameAsString()] = typeStr;
+        ValuesMap[TD->getQualifiedNameAsString()] = typeStr;
         return true;
     }
 
     bool VisitTypedefDecl(TypedefDecl *TD) {
         std::string typeStr = TD->getUnderlyingType().getAsString();
-        ValuesMap[TD->getNameAsString()] = typeStr;
+        ValuesMap[TD->getQualifiedNameAsString()] = typeStr;
         return true;
     }
 };

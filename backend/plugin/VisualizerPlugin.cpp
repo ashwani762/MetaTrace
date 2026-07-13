@@ -136,6 +136,17 @@ public:
         }
         return true;
     }
+    bool VisitTypeAliasDecl(TypeAliasDecl *TD) {
+        std::string typeStr = TD->getUnderlyingType().getAsString();
+        ValuesMap[TD->getQualifiedNameAsString()] = typeStr;
+        return true;
+    }
+
+    bool VisitTypedefDecl(TypedefDecl *TD) {
+        std::string typeStr = TD->getUnderlyingType().getAsString();
+        ValuesMap[TD->getQualifiedNameAsString()] = typeStr;
+        return true;
+    }
 };
 
 class VisualizerASTConsumer : public SemaConsumer {
