@@ -37,21 +37,22 @@ const widthPercent = computed(() => {
 });
 
 const hue = computed(() => {
-    // VTune style warm colors: yellow to orange-red.
-    // Vary hue between 10 (red-orange) and 50 (yellow) based on string hash for consistent coloring.
+    // Generate distinct hues based on string hash for consistent coloring across the spectrum
     const nameStr = props.node.name || '';
     let hash = 0;
     for (let i = 0; i < nameStr.length; i++) {
         hash = nameStr.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return 10 + (Math.abs(hash) % 40);
+    // Avoid too much red/yellow (error/search colors)
+    const rawHue = Math.abs(hash) % 360;
+    return rawHue > 330 || rawHue < 40 ? rawHue + 60 : rawHue; 
 });
 
 const bgColor = computed(() => {
     if (isSearchMatch.value) return '#facc15'; // bright yellow for search matches
     if (props.node.failed) return '#ef4444'; // Solid Red for failed SFINAE
-    // Warm colors typical of VTune
-    return `hsl(${hue.value}, 85%, 45%)`;
+    // Vibrant but readable colors
+    return `hsl(${hue.value}, 70%, 45%)`;
 });
 
 </script>
@@ -63,16 +64,14 @@ const bgColor = computed(() => {
     :style="{ width: `${widthPercent}%`, minWidth: '1px' }"
   >
     <div 
-      class="h-6 whitespace-nowrap overflow-hidden text-ellipsis px-1 text-xs border-r border-[#1e1e1e] cursor-pointer transition-colors"
+      class="h-7 whitespace-nowrap overflow-hidden text-ellipsis px-1.5 py-1 text-xs cursor-pointer transition-all duration-150 relative ring-1 ring-inset ring-gray-950/40"
       :class="[
-        isBottomUp ? 'border-t' : 'border-b',
-        isSearchMatch ? 'text-black font-bold' : 'text-white'
+        isSearchMatch ? 'text-black font-bold' : 'text-gray-100 font-medium',
+        'hover:opacity-90 hover:z-10 hover:ring-2 hover:ring-white/50'
       ]"
       :style="{ backgroundColor: bgColor }"
       :title="`${node.name}\nTotal: ${(node.dur / 1000).toFixed(3)} ms`"
       @click="onClick"
-      onmouseover="this.style.filter='brightness(1.2)'"
-      onmouseout="this.style.filter='brightness(1)'"
     >
       {{ node.name }}
     </div>

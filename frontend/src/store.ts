@@ -47,7 +47,8 @@ watch(currentStepIndex, () => {
 export const activeStack = computed(() => {
   let targetIndex = currentStepIndex.value;
   if (selectedNodeId.value) {
-    const idx = traceSteps.value.findIndex(s => s.id === selectedNodeId.value && s.type === 'begin');
+    // Find the step corresponding to the selected node
+    const idx = traceSteps.value.findIndex(s => String(s.id) === String(selectedNodeId.value) && s.type === 'begin');
     if (idx >= 0) targetIndex = idx;
   }
 
