@@ -149,9 +149,11 @@ const onNodeClick = (event: any) => {
     if (tooltipPinned.value && selectedNodeId.value === id) {
         tooltipPinned.value = false;
         selectedNodeId.value = null;
+        hoveredNodeId.value = id;
     } else {
         selectedNodeId.value = id;
         tooltipPinned.value = true;
+        hoveredNodeId.value = null;
         // Search tree for node location
         function findNodeRecursive(treeNodes: any[], idToFind: string): any | null {
             for (const n of treeNodes) {
