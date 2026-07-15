@@ -11,7 +11,7 @@ import Editor from './Editor.vue';
 
 function findNodeInTree(nodes: any[], id: string): any {
   for (const n of nodes) {
-    if (n.id === id) return n;
+    if (String(n.id) === String(id)) return n;
     if (n.children && n.children.length > 0) {
       const found = findNodeInTree(n.children, id);
       if (found) return found;

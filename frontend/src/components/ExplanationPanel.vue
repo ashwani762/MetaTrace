@@ -32,7 +32,7 @@ function getKindExplanation(kind: number | undefined) {
   switch (kind) {
     case 0: return "Instantiating function/class definition (body)";
     case 3: 
-    case 4: return "Substituting arguments for overload resolution / signature check";
+    case 4: return "Substituting arguments for overload resolution / signature check. This often triggers the instantiation of classes used in the return type (SFINAE check).";
     default: return null;
   }
 }

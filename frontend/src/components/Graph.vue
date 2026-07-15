@@ -474,7 +474,7 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: 'TB', ranksep: 60, nodesep: 40 });
 
-    function traverse(nodeData: any, parentId: string | null) {
+    function traverse(nodeData: any, parentId: string | null, parentKind: number | null) {
         if (!activeIds.has(nodeData.id) && !finishedIds.has(nodeData.id)) {
             return;
         }
@@ -561,24 +561,35 @@ watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]
 
         if (parentId) {
             dagreGraph.setEdge(parentId, nodeIdStr);
+            
+            let edgeLabel = '';
+            let edgeLabelBg = '';
+            if (parentKind === 3 || parentKind === 4) {
+                edgeLabel = 'Signature deduction';
+                edgeLabelBg = '#1f2937';
+            }
+
             currentEdges.push({
                 id: `e-${parentId}-${nodeIdStr}`,
                 source: parentId,
                 target: nodeIdStr,
                 type: 'smoothstep',
                 animated: isActive,
+                label: edgeLabel,
+                labelBgStyle: { fill: edgeLabelBg },
+                labelStyle: { fill: '#9ca3af', fontSize: '10px', fontFamily: 'monospace' },
                 style: { stroke: isActive ? '#60a5fa' : '#9ca3af', strokeWidth: 3 },
                 markerEnd: { type: MarkerType.ArrowClosed, color: isActive ? '#60a5fa' : '#9ca3af' }
             });
         }
 
         for (const child of nodeData.children || []) {
-            traverse(child, nodeIdStr);
+            traverse(child, nodeIdStr, nodeData.kind);
         }
     }
 
     for (const root of props.tree) {
-        traverse(root, null);
+        traverse(root, null, null);
     }
 
     // Execute dagre layout
