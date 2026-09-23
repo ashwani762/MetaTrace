@@ -37,8 +37,11 @@ const jumpToLine = (line: number) => {
 <template>
   <div data-tour="overloads" class="h-full w-full bg-gray-950 text-gray-300 font-mono text-xs overflow-y-auto p-3 space-y-3">
     <div v-if="overloadCalls.length === 0 && specializationChoices.length === 0" class="flex h-full items-center justify-center text-gray-600 italic text-sm text-center px-6">
-      No function-template overload resolution in this trace.
-      Calls that deduce template arguments (e.g. <code class="mx-1 text-gray-400">process(5)</code>) appear here with every candidate and why it was kept or discarded.
+      <!-- One paragraph so the inline code stays in the sentence (flex would split it into columns) -->
+      <p class="max-w-md leading-relaxed">
+        No function-template overload resolution in this trace.
+        Calls that deduce template arguments (e.g. <code class="px-1 not-italic text-gray-400">process(5)</code>) appear here with every candidate and why it was kept or discarded.
+      </p>
     </div>
 
     <div v-for="call in overloadCalls" :key="call.key" class="rounded border border-gray-800 bg-gray-900/60">
