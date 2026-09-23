@@ -1,4 +1,4 @@
-// Copyright (c) 2024 MetaTrace Contributors
+// Copyright (c) 2026 MetaTrace Contributors
 // 
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
@@ -17,4 +17,11 @@ export default defineConfig({
       languageWorkers: ['editorWorkerService', 'typescript', 'json', 'html']
     })
   ],
+  server: {
+    // Forward API and LSP traffic to the backend (see README: BACKEND_PORT must match its PORT)
+    proxy: {
+      '/api': `http://localhost:${process.env.BACKEND_PORT || 80}`,
+      '/lsp': { target: `ws://localhost:${process.env.BACKEND_PORT || 80}`, ws: true }
+    }
+  },
 })

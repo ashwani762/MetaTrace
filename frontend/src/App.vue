@@ -1,5 +1,5 @@
 <!--
-  Copyright (c) 2024 MetaTrace Contributors
+  Copyright (c) 2026 MetaTrace Contributors
   
   This software is released under the MIT License.
   https://opensource.org/licenses/MIT
@@ -17,6 +17,11 @@ import ScrubberPanel from './components/ScrubberPanel.vue';
 import FlamegraphPanel from './components/FlamegraphPanel.vue';
 import TypeResolutionPanel from './components/TypeResolutionPanel.vue';
 import DesugaredCodePanel from './components/DesugaredCodePanel.vue';
+import OverloadPanel from './components/OverloadPanel.vue';
+import HotspotsPanel from './components/HotspotsPanel.vue';
+import InspectorPanel from './components/InspectorPanel.vue';
+import TourOverlay from './components/TourOverlay.vue';
+import { EXAMPLES } from './examples';
 
 import { GoldenLayout, LayoutConfig, ResolvedLayoutConfig } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
@@ -28,7 +33,12 @@ import {
   traceSteps, 
   resetVisualizer,
   compileCode,
-  stopCompile
+  stopCompile,
+  code,
+  handleStep,
+  togglePlay,
+  tourOpen,
+  maybeStartTour
 } from './store';
 
 const layoutContainer = ref<HTMLElement | null>(null);
@@ -36,53 +46,99 @@ const showThankYou = ref(false);
 let layout: GoldenLayout | null = null;
 const appInstances: ReturnType<typeof createApp>[] = [];
 
-const visiblePanels = ref({
+// Bumped whenever the default layout changes so old saved layouts don't hide new panels
+const LAYOUT_KEY = 'metatrace.layout.v2';
+
+const DEFAULT_PANELS = {
   Code: true,
   Visualizer: true,
   Output: true,
+  Inspector: true,
+  Overloads: true,
+  Hotspots: true,
   Explanation: true,
+  DesugaredCode: false,
   Stack: false,
   Variables: false,
   Flamegraph: false,
-  TypeResolution: false,
-  DesugaredCode: true
-});
+  TypeResolution: false
+};
+
+const PANEL_LABELS: Record<keyof typeof DEFAULT_PANELS, string> = {
+  Code: 'Code Editor',
+  Visualizer: 'Instantiation Graph',
+  Output: 'Compiler Output',
+  Inspector: 'Inspector',
+  Overloads: 'Overloads & Specializations',
+  Hotspots: 'Template Hotspots',
+  Explanation: 'Step Log',
+  DesugaredCode: 'Desugared C++',
+  Stack: 'Call Stack',
+  Variables: 'Variables',
+  Flamegraph: 'Flamegraph',
+  TypeResolution: 'Type Resolution'
+};
+
+const visiblePanels = ref({ ...DEFAULT_PANELS });
 
 const showViewMenu = ref(false);
+const showHelpMenu = ref(false);
+const showShortcuts = ref(false);
 
+// Examples gallery
+const exampleId = ref('');
+const exampleHint = ref('');
+const loadExample = () => {
+  const ex = EXAMPLES.find(e => e.id === exampleId.value);
+  if (!ex) return;
+  code.value = ex.code;
+  standard.value = ex.standard;
+  exampleHint.value = ex.hint;
+  exampleId.value = '';
+  compileCode();
+};
+
+/**
+ * Three-column workspace: code on the left, the graph in the middle, and one tabbed
+ * sidebar on the right for details and analysis.
+ */
 const generateConfig = (): LayoutConfig => {
-  const leftCol = [];
-  if (visiblePanels.value.Code) leftCol.push({ type: 'component', componentType: 'Editor', title: 'Code Editor', height: 70 });
-  if (visiblePanels.value.Output) leftCol.push({ type: 'component', componentType: 'Output', title: 'Output', height: 30 });
+  const v = visiblePanels.value;
+  const comp = (componentType: string, key: keyof typeof DEFAULT_PANELS) =>
+    ({ type: 'component', componentType, title: PANEL_LABELS[key] });
 
-  const rightTop = [];
-  if (visiblePanels.value.Visualizer) rightTop.push({ type: 'component', componentType: 'Graph', title: 'Instantiation Graph' });
+  const leftCol: any[] = [];
+  if (v.Code) leftCol.push({ ...comp('Editor', 'Code'), height: 72 });
+  if (v.Output) leftCol.push({ ...comp('Output', 'Output'), height: 28 });
 
-  const rightBottom = [];
-  if (visiblePanels.value.Stack) rightBottom.push({ type: 'component', componentType: 'Stack', title: 'Call Stack' });
-  if (visiblePanels.value.Variables) rightBottom.push({ type: 'component', componentType: 'Variables', title: 'Variables' });
-  if (visiblePanels.value.Explanation) rightBottom.push({ type: 'component', componentType: 'Explanation', title: 'Steps & Explanations' });
-  if (visiblePanels.value.Flamegraph) rightBottom.push({ type: 'component', componentType: 'Flamegraph', title: 'Flamegraph' });
-  if (visiblePanels.value.TypeResolution) rightBottom.push({ type: 'component', componentType: 'TypeResolution', title: 'Type Resolution' });
-  if (visiblePanels.value.DesugaredCode) rightBottom.push({ type: 'component', componentType: 'DesugaredCode', title: 'Desugared C++' });
-
-  const rightCol = [];
-  if (rightTop.length > 0) rightCol.push({ type: 'row', height: rightBottom.length > 0 ? 70 : 100, content: rightTop });
-  if (rightBottom.length > 0) rightCol.push({ type: 'row', height: rightTop.length > 0 ? 30 : 100, content: rightBottom });
+  const sidebar: any[] = [];
+  if (v.Inspector) sidebar.push(comp('Inspector', 'Inspector'));
+  if (v.Overloads) sidebar.push(comp('Overloads', 'Overloads'));
+  if (v.Hotspots) sidebar.push(comp('Hotspots', 'Hotspots'));
+  if (v.Explanation) sidebar.push(comp('Explanation', 'Explanation'));
+  if (v.DesugaredCode) sidebar.push(comp('DesugaredCode', 'DesugaredCode'));
+  if (v.Stack) sidebar.push(comp('Stack', 'Stack'));
+  if (v.Variables) sidebar.push(comp('Variables', 'Variables'));
+  if (v.Flamegraph) sidebar.push(comp('Flamegraph', 'Flamegraph'));
+  if (v.TypeResolution) sidebar.push(comp('TypeResolution', 'TypeResolution'));
 
   const content: any[] = [];
-  if (leftCol.length > 0) content.push({ type: 'column', width: 30, content: leftCol });
-  if (rightCol.length > 0) content.push({ type: 'column', width: 70, content: rightCol });
+  if (leftCol.length > 0) content.push({ type: 'column', width: 27, content: leftCol });
+  if (v.Visualizer) content.push({ ...comp('Graph', 'Visualizer'), width: sidebar.length ? 47 : 73 });
+  if (sidebar.length > 0) content.push({ type: 'stack', width: 26, content: sidebar });
 
   return {
     settings: {
       showPopoutIcon: false
     },
+    dimensions: {
+      headerHeight: 28
+    },
     root: {
       type: 'row',
       content: content
     }
-  };
+  } as LayoutConfig;
 };
 
 const notification = ref('');
@@ -122,7 +178,7 @@ const initLayout = (useSaved: boolean = true) => {
 
   let layoutConfig = generateConfig();
   if (useSaved) {
-    const saved = localStorage.getItem('savedGoldenLayout');
+    const saved = localStorage.getItem(LAYOUT_KEY);
     if (saved) {
       try {
         layoutConfig = JSON.parse(saved);
@@ -133,7 +189,8 @@ const initLayout = (useSaved: boolean = true) => {
             obj.forEach(fixSizes);
           } else if (obj !== null && typeof obj === 'object') {
             ['width', 'height', 'size', 'minWidth', 'minHeight'].forEach(key => {
-              if (typeof obj[key] === 'number') obj[key] = String(obj[key]) + '%';
+              // Resolved configs store the unit separately (e.g. size: 1, sizeUnit: 'fr'); leave those alone
+              if (typeof obj[key] === 'number' && obj[`${key}Unit`] === undefined) obj[key] = String(obj[key]) + '%';
             });
             Object.values(obj).forEach(fixSizes);
           }
@@ -170,6 +227,9 @@ const initLayout = (useSaved: boolean = true) => {
   register('Flamegraph', FlamegraphPanel);
   register('TypeResolution', TypeResolutionPanel);
   register('DesugaredCode', DesugaredCodePanel);
+  register('Overloads', OverloadPanel);
+  register('Hotspots', HotspotsPanel);
+  register('Inspector', InspectorPanel);
 
   layout.addEventListener('itemDestroyed', (ev: any) => {
     if (isLayoutInitializing) return;
@@ -184,33 +244,38 @@ const initLayout = (useSaved: boolean = true) => {
         'Explanation': 'Explanation',
         'Flamegraph': 'Flamegraph',
         'TypeResolution': 'TypeResolution',
-        'DesugaredCode': 'DesugaredCode'
+        'DesugaredCode': 'DesugaredCode',
+        'Overloads': 'Overloads',
+        'Hotspots': 'Hotspots',
+        'Inspector': 'Inspector'
       };
       const panelKey = mapComponentToPanel[compName];
       if (panelKey && visiblePanels.value[panelKey as keyof typeof visiblePanels.value]) {
         visiblePanels.value[panelKey as keyof typeof visiblePanels.value] = false;
-        localStorage.setItem('savedGoldenLayout', JSON.stringify(layout!.saveLayout()));
+        localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout!.saveLayout()));
       }
     }
   });
 
-  layout.init();
+  try {
+    layout.init();
+  } catch (e) {
+    // A stale or incompatible saved layout must never leave the app blank
+    console.error('Failed to restore saved layout, falling back to default', e);
+    isLayoutInitializing = false;
+    if (useSaved) {
+      localStorage.removeItem(LAYOUT_KEY);
+      initLayout(false);
+      return;
+    }
+    throw e;
+  }
   isLayoutInitializing = false;
 };
 
 const resetLayout = () => {
-  localStorage.removeItem('savedGoldenLayout');
-  visiblePanels.value = {
-    Code: true,
-    Visualizer: true,
-    Output: true,
-    Explanation: true,
-    Stack: false,
-    Variables: false,
-    Flamegraph: false,
-    TypeResolution: false,
-    DesugaredCode: true
-  };
+  localStorage.removeItem(LAYOUT_KEY);
+  visiblePanels.value = { ...DEFAULT_PANELS };
   initLayout(false);
   showNotification('Layout reset to default!');
 };
@@ -226,13 +291,29 @@ const resizeHandler = () => {
   }
 };
 
+// Keyboard stepping, ignored while typing in the editor or an input
+const onKeyDown = (e: KeyboardEvent) => {
+  if (tourOpen.value) return;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.closest('.monaco-editor') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName))) return;
+  if (e.key === 'ArrowRight') { handleStep('in'); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { handleStep('back'); e.preventDefault(); }
+  else if (e.key === 'ArrowDown') { handleStep('over'); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { handleStep('out'); e.preventDefault(); }
+  else if (e.key === ' ') { togglePlay(); e.preventDefault(); }
+};
+
 onMounted(() => {
+  window.addEventListener('keydown', onKeyDown);
   initLayout(true);
+  // First visit: offer the guided tour once the layout has rendered
+  setTimeout(maybeStartTour, 400);
   window.addEventListener('resize', resizeHandler);
   window.addEventListener('clangd-download-progress', handleDownloadProgress);
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('resize', resizeHandler);
   window.removeEventListener('clangd-download-progress', handleDownloadProgress);
   appInstances.forEach(app => app.unmount());
@@ -262,7 +343,18 @@ onBeforeUnmount(() => {
           <option value="c++23">C++23</option>
           <option value="c++26">C++26</option>
         </select>
+        <select
+          data-tour="examples"
+          v-model="exampleId"
+          @change="loadExample"
+          class="bg-gray-800 border border-gray-700 text-sm rounded px-2 py-1 outline-none focus:border-blue-500 text-gray-300"
+          title="Load a curated example that demonstrates a metaprogramming technique"
+        >
+          <option value="" disabled>Examples…</option>
+          <option v-for="ex in EXAMPLES" :key="ex.id" :value="ex.id">{{ ex.title }}</option>
+        </select>
         <button 
+          data-tour="build"
           @click="compileCode" 
           :disabled="isCompiling"
           class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-1.5 rounded shadow flex items-center transition-colors"
@@ -309,19 +401,27 @@ onBeforeUnmount(() => {
           <div v-if="showViewMenu" class="absolute right-2 top-full mt-1 bg-gray-800 border border-gray-700 shadow-xl rounded z-50 min-w-[150px] p-2 flex flex-col space-y-2">
             <label v-for="(val, key) in visiblePanels" :key="key" class="flex items-center space-x-2 cursor-pointer text-sm text-gray-200 hover:bg-gray-700 px-2 py-1 rounded">
               <input type="checkbox" :checked="val" @change="togglePanel(key)" class="rounded bg-gray-900 border-gray-700 text-blue-500 focus:ring-0">
-              <span>{{ key }}</span>
+              <span>{{ PANEL_LABELS[key] }}</span>
             </label>
           </div>
         </div>
 
-        <button 
-          @click="showThankYou = true"
-          class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors mr-2"
-          title="Acknowledgments & Licenses"
-        >
-          <svg class="w-4 h-4 mr-1.5 text-pink-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          Thank You
-        </button>
+        <div class="relative mr-2">
+          <button
+            data-tour="help"
+            @click="showHelpMenu = !showHelpMenu"
+            class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm px-3 py-1.5 rounded shadow flex items-center transition-colors relative z-50"
+          >
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Help
+          </button>
+          <div v-if="showHelpMenu" @click="showHelpMenu = false" class="fixed inset-0 z-40"></div>
+          <div v-if="showHelpMenu" class="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 shadow-xl rounded z-50 min-w-[190px] p-1 flex flex-col text-sm">
+            <button class="text-left px-3 py-1.5 rounded hover:bg-gray-700 text-gray-200" @click="showHelpMenu = false; tourOpen = true">Take the tour</button>
+            <button class="text-left px-3 py-1.5 rounded hover:bg-gray-700 text-gray-200" @click="showHelpMenu = false; showShortcuts = true">Keyboard shortcuts</button>
+            <button class="text-left px-3 py-1.5 rounded hover:bg-gray-700 text-gray-200" @click="showHelpMenu = false; showThankYou = true">Acknowledgments</button>
+          </div>
+        </div>
 
         <button 
           @click="resetLayout"
@@ -334,8 +434,33 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <!-- What to look at for the loaded example -->
+    <div v-if="exampleHint" class="bg-blue-950/60 border-b border-blue-900/60 text-blue-100 text-xs px-4 py-1.5 flex items-center gap-2 shrink-0">
+      <span class="text-blue-300 font-semibold">Tip</span>
+      <span>{{ exampleHint }}</span>
+      <button class="ml-auto text-blue-300 hover:text-white" @click="exampleHint = ''" title="Dismiss">✕</button>
+    </div>
+
     <!-- Golden Layout Container -->
     <main ref="layoutContainer" class="flex-1 w-full relative"></main>
+
+    <TourOverlay />
+
+    <!-- Keyboard shortcuts -->
+    <div v-if="showShortcuts" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="showShortcuts = false">
+      <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-2xl w-full max-w-md p-5 text-gray-200">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-lg font-bold">Keyboard shortcuts</h2>
+          <button @click="showShortcuts = false" class="text-gray-400 hover:text-white">✕</button>
+        </div>
+        <table class="w-full text-sm">
+          <tr v-for="[k, d] in [['←  /  →', 'Step back / forward'], ['↓', 'Step over (skip the current subtree)'], ['↑', 'Step out to the parent'], ['Space', 'Play / pause the trace'], ['Enter (in Find)', 'Jump to the next matching template'], ['Double-click a card', 'Collapse / expand its subtree']]" :key="k" class="border-b border-gray-700/60">
+            <td class="py-1.5 pr-4 font-mono text-blue-300 whitespace-nowrap">{{ k }}</td>
+            <td class="py-1.5 text-gray-300">{{ d }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
 
     <!-- Thank You Modal -->
     <div v-if="showThankYou" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">

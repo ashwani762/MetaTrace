@@ -1,5 +1,5 @@
 <!--
-  Copyright (c) 2024 MetaTrace Contributors
+  Copyright (c) 2026 MetaTrace Contributors
   
   This software is released under the MIT License.
   https://opensource.org/licenses/MIT
@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue';
 import { traceSteps, logicalStepIndex } from '../store';
+import { describeKind } from '../kinds';
 
 const currentSteps = computed(() => {
   if (logicalStepIndex.value < 0) return [];
@@ -27,14 +28,8 @@ function formatName(name: string) {
   return name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function getKindExplanation(kind: number | undefined) {
-  if (kind === undefined) return null;
-  switch (kind) {
-    case 0: return "Instantiating function/class definition (body)";
-    case 3: 
-    case 4: return "Substituting arguments for overload resolution / signature check. This often triggers the instantiation of classes used in the return type (SFINAE check).";
-    default: return null;
-  }
+function getKindExplanation(kindName: string | undefined) {
+  return describeKind(kindName)?.explanation ?? null;
 }
 </script>
 
@@ -62,8 +57,20 @@ function getKindExplanation(kind: number | undefined) {
             Evaluating <span class="text-purple-300 italic" v-html="formatName(step.name)"></span>
           </span>
         </div>
-        <div v-if="getKindExplanation(step.kind)" class="ml-5 mt-1 text-xs text-gray-500 italic">
-          // {{ getKindExplanation(step.kind) }}
+        <div v-if="getKindExplanation(step.kindName)" class="ml-5 mt-1 text-xs text-gray-500 italic">
+          // {{ getKindExplanation(step.kindName) }}
+        </div>
+      </div>
+
+      <div v-else-if="step.type === 'end' && step.failed" class="flex items-start">
+        <span class="text-red-400 font-bold mr-2">✖</span>
+        <div class="flex flex-col">
+          <span>
+            Discarded <span class="text-purple-300 italic" v-html="formatName(step.name)"></span>
+          </span>
+          <div class="mt-1 text-xs bg-red-950/40 p-1.5 rounded inline-block border border-red-900/60 text-red-200">
+            {{ step.failReason || 'Substitution failure' }}
+          </div>
         </div>
       </div>
 
@@ -72,6 +79,7 @@ function getKindExplanation(kind: number | undefined) {
         <div class="flex flex-col">
           <span>
             Resolved <span class="text-purple-300 italic" v-html="formatName(step.name)"></span>
+            <span v-if="step.memoHits" class="ml-1 text-xs text-gray-500" title="Later requests for this specialization reused it instead of instantiating again">♻ reused {{ step.memoHits }}×</span>
           </span>
           <div v-if="step.values && Object.keys(step.values).length > 0" class="mt-1 text-xs bg-gray-950/50 p-1.5 rounded inline-block border border-gray-800">
             <span class="text-gray-500">Result: </span>

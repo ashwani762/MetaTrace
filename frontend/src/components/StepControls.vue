@@ -1,5 +1,5 @@
 <!--
-  Copyright (c) 2024 MetaTrace Contributors
+  Copyright (c) 2026 MetaTrace Contributors
   
   This software is released under the MIT License.
   https://opensource.org/licenses/MIT
@@ -10,7 +10,10 @@ import {
   logicalStepIndex,
   logicalMaxSteps,
   setStepIndex,
-  handleStep
+  handleStep,
+  isPlaying,
+  playSpeed,
+  togglePlay
 } from '../store';
 import { computed } from 'vue';
 
@@ -39,6 +42,29 @@ const progress = computed({
     </svg>
   </button>
 
+  <button
+    @click="togglePlay"
+    :disabled="traceSteps.length === 0"
+    :class="[
+      'disabled:opacity-30 text-gray-200 transition-colors',
+      compact ? 'p-1 rounded-full hover:bg-gray-700/80' : 'p-1.5 rounded hover:bg-gray-700'
+    ]"
+    :title="isPlaying ? 'Pause (Space)' : 'Play the trace step by step (Space)'"
+  >
+    <svg v-if="!isPlaying" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+  </button>
+  <select
+    v-model.number="playSpeed"
+    class="bg-transparent text-[11px] text-gray-400 outline-none cursor-pointer"
+    title="Playback speed (steps per second)"
+  >
+    <option :value="1">1×</option>
+    <option :value="4">4×</option>
+    <option :value="12">12×</option>
+    <option :value="40">40×</option>
+  </select>
+  <span class="text-[11px] text-gray-400 tabular-nums whitespace-nowrap" title="Current step / total steps">{{ logicalStepIndex + 1 }}/{{ logicalMaxSteps }}</span>
   <input
     type="range"
     min="-1"

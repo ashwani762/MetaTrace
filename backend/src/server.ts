@@ -1,4 +1,4 @@
-// Copyright (c) 2024 MetaTrace Contributors
+// Copyright (c) 2026 MetaTrace Contributors
 // 
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
@@ -145,7 +145,7 @@ app.post('/api/compile', async (req, res) => {
     if (isDebug) console.log(`[DEBUG] Execute finished`);
     
     const traceFile = path.join(tmpDir, 'trace_custom.json');
-    let traceDataObj = { nodes: [], events: [], values: {} };
+    let traceDataObj: any = { nodes: [], events: [], values: {}, memoHits: {} };
     try {
         const traceData = await fs.readFile(traceFile, 'utf-8');
         if (isDebug) console.log(`[DEBUG] Trace file read successfully, length: ${traceData.length}`);
@@ -159,6 +159,8 @@ app.post('/api/compile', async (req, res) => {
         nodes: traceDataObj.nodes,
         events: traceDataObj.events,
         values: traceDataObj.values,
+        memoHits: traceDataObj.memoHits || {},
+        reuses: traceDataObj.reuses || [],
         output: traceResult.stdout,
         stderr: traceResult.stderr
     });

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const MIT_HEADER_JS = `// Copyright (c) 2024 MetaTrace Contributors
+const MIT_HEADER_JS = `// Copyright (c) 2026 MetaTrace Contributors
 // 
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
@@ -9,7 +9,7 @@ const MIT_HEADER_JS = `// Copyright (c) 2024 MetaTrace Contributors
 `;
 
 const MIT_HEADER_VUE = `<!--
-  Copyright (c) 2024 MetaTrace Contributors
+  Copyright (c) 2026 MetaTrace Contributors
   
   This software is released under the MIT License.
   https://opensource.org/licenses/MIT

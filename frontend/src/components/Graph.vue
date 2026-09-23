@@ -1,11 +1,11 @@
 <!--
-  Copyright (c) 2024 MetaTrace Contributors
-  
+  Copyright (c) 2026 MetaTrace Contributors
+
   This software is released under the MIT License.
   https://opensource.org/licenses/MIT
 -->
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core';
 import '@vue-flow/core/dist/style.css';
 import '@vue-flow/core/dist/theme-default.css';
@@ -13,7 +13,21 @@ import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import '@vue-flow/controls/dist/style.css';
 import dagre from 'dagre';
-import { selectedNodeId } from '../store';
+import {
+    selectedNodeId, focusNode, graphOptions, visibleGraph, stepIndexById,
+    traceReuses, collapseAll, expandAll, toggleCollapse, code
+} from '../store';
+import { describeKind, isDeduction, splitTemplateName } from '../kinds';
+import MetaNode from './MetaNode.vue';
+import ReuseEdge from './ReuseEdge.vue';
+import LaneNode from './LaneNode.vue';
+import type { LaneNodeData } from './LaneNode.vue';
+import type { MetaNodeData } from './MetaNode.vue';
+
+const nodeTypes = { meta: markRaw(MetaNode), lane: markRaw(LaneNode) } as any;
+const edgeTypes = { reuse: markRaw(ReuseEdge) } as any;
+
+const NODE_WIDTH = 320;
 
 const THEME = {
     selected: { bg: '#4c1d95', border: '#a78bfa' }, // Purple
@@ -30,14 +44,13 @@ const THEME = {
 
 const LEGEND_ITEMS = [
     { label: 'Selected Node', colors: THEME.selected },
-    { label: 'Error / SFINAE Failure', colors: THEME.failed },
-    { label: 'Template (Active)', colors: THEME.normalCurrent },
-    { label: 'Template (In Progress)', colors: THEME.normalActive },
-    { label: 'Template (Completed)', colors: THEME.normalFinished },
-    { label: 'Type Alias (Active)', colors: THEME.aliasCurrent },
-    { label: 'Type Alias (In Progress)', colors: THEME.aliasActive },
-    { label: 'Type Alias (Completed)', colors: THEME.aliasFinished },
-    { label: 'Declaration / Overload', colors: { bg: THEME.normalFinished.bg, border: THEME.normalFinished.border }, style: 'dashed' }
+    { label: 'Rejected candidate (SFINAE / constraints)', colors: THEME.failed },
+    { label: 'Currently being instantiated', colors: THEME.normalCurrent },
+    { label: 'In progress (waiting on children)', colors: THEME.normalActive },
+    { label: 'Completed', colors: THEME.normalFinished },
+    { label: 'Type alias', colors: THEME.aliasFinished },
+    { label: 'Overload candidate / base case', colors: { bg: THEME.normalFinished.bg, border: THEME.normalFinished.border }, style: 'dashed' },
+    { label: 'Reused from cache (no new instantiation)', colors: { bg: 'transparent', border: '#a78bfa' }, style: 'dotted' }
 ];
 const props = defineProps<{
     steps: any[],
@@ -55,128 +68,219 @@ const hoveredNodeId = ref<string | null>(null);
 const tooltipPos = ref({ x: 0, y: 0 });
 const tooltipPinned = ref(false);
 
+function phaseGroupOf(n: any): MetaNodeData['phaseGroup'] {
+    if (n.kindName === 'ExplicitSpecialization') return 'base';
+    if (isDeduction(n.kindName)) return 'deduce';
+    if (n.entityKind === 'concept' || n.kindName === 'ConstraintsCheck') return 'concept';
+    if (n.isAlias || n.kindName === 'TypeAliasTemplateInstantiation') return 'alias';
+    if (n.kindName === 'TemplateInstantiation') return 'instantiate';
+    return 'other';
+}
+
+function phaseLabelOf(n: any): string {
+    if (n.kindName === 'ExplicitSpecialization') return 'base case';
+    if (n.kindName === 'TemplateInstantiation') {
+        return n.entityKind === 'function' ? 'function body' : n.entityKind === 'variable' ? 'variable' : 'class';
+    }
+    if (isDeduction(n.kindName)) return 'candidate';
+    return describeKind(n.kindName)?.tag ?? 'step';
+}
+
+function resultOf(n: any): string | undefined {
+    const entries = Object.entries(n.values || {});
+    if (entries.length === 0) return undefined;
+    return entries.slice(0, 2).map(([k, v]) => `${k} = ${v}`).join(', ');
+}
+
+/** Estimated card height; must match what MetaNode renders so the layout doesn't overlap. */
+function cardHeight(d: MetaNodeData): number {
+    let h = 16 + 20; // padding + header
+    if (d.args.length) {
+        const chars = d.args.slice(0, 4).reduce((s, a) => s + Math.min(a.length, 38) + 3, 0);
+        h += 6 + 18 * Math.max(1, Math.ceil(chars / 40));
+    }
+    if (d.result || d.reuse || d.collapsed) h += 22;
+    if (d.reason) h += 36;
+    return h;
+}
+
+function buildNodeData(n: any, v: { childCount: number, hiddenCount: number }, collapsed: boolean): MetaNodeData {
+    const { base, args } = splitTemplateName(n.name);
+    return {
+        label: n.name,
+        base,
+        args,
+        phase: phaseLabelOf(n),
+        phaseGroup: phaseGroupOf(n),
+        result: resultOf(n),
+        reason: n.failed ? (n.failReason || 'Substitution failure') : undefined,
+        failKind: n.failKind,
+        reuse: n.memoHits || 0,
+        line: n.line,
+        childCount: v.childCount,
+        hiddenCount: v.hiddenCount,
+        collapsed
+    };
+}
+
+const LANE_HEIGHT = 44;
+const LANE_GAP = 70;
+
+interface Lane {
+    id: string;
+    roots: string[];
+    data: LaneNodeData;
+}
+
 /**
- * Parses a C++ template name into its base name and arguments.
- * Also checks the step history to determine the node's current status and return values.
- * 
- * @param nodeName - The raw template name (e.g. "Factorial<5>")
- * @param nodeId - The unique ID of the node to check status in the step history
- * @returns An array of name/value pairs for the tooltip
+ * Layout of every visible node, computed once per trace/filter change. Stepping through
+ * time only reveals nodes, so nothing jumps around while you scrub.
+ *
+ * Top-level instantiations are grouped into swimlanes by the source line that triggered
+ * them, and lanes are stacked in source order, so the graph reads top-to-bottom like the code.
  */
-function parseNodeVars(nodeName: string, nodeId: string) {
-    const vars: { name: string, value: string }[] = [];
-    const match = nodeName.match(/^([^<]+)<(.+)>$/);
+const layout = computed(() => {
+    const { visible } = visibleGraph.value;
+    const data = new Map<string, MetaNodeData>();
+    const kids = new Map<string | null, string[]>();
+    for (const [id, v] of visible) {
+        data.set(id, buildNodeData(v.node, v, v.hiddenCount > 0));
+        if (!kids.has(v.visParentId)) kids.set(v.visParentId, []);
+        kids.get(v.visParentId)!.push(id);
+    }
 
-    if (!match) {
-        vars.push({ name: 'Template', value: nodeName });
-    } else {
-        vars.push({ name: 'Template', value: match[1].trim() });
-        const argsStr = match[2];
-        const args: string[] = [];
-        let depth = 0;
-        let currentArg = '';
-        for (let i = 0; i < argsStr.length; i++) {
-            const c = argsStr[i];
-            if (c === '<') depth++;
-            else if (c === '>') depth--;
-            else if (c === ',' && depth === 0) {
-                args.push(currentArg.trim());
-                currentArg = '';
-                continue;
+    // Group roots by triggering line
+    const byLine = new Map<number, string[]>();
+    for (const r of kids.get(null) || []) {
+        const line = visible.get(r)!.node.line || 0;
+        if (!byLine.has(line)) byLine.set(line, []);
+        byLine.get(line)!.push(r);
+    }
+    const lines = [...byLine.keys()].sort((a, b) => (a || Infinity) - (b || Infinity));
+    const sourceLines = code.value.split('\n');
+
+    const positions = new Map<string, { x: number, y: number, h: number }>();
+    const lanes: Lane[] = [];
+    let yOffset = 0;
+
+    for (const line of lines) {
+        const roots = byLine.get(line)!;
+        const laneId = `lane-${line}`;
+        const g = new dagre.graphlib.Graph();
+        g.setDefaultEdgeLabel(() => ({}));
+        g.setGraph({ rankdir: 'TB', ranksep: 50, nodesep: 30 });
+        g.setNode(laneId, { width: NODE_WIDTH + 80, height: LANE_HEIGHT });
+
+        let count = 0, failures = 0;
+        const stack = [...roots];
+        for (const r of roots) g.setEdge(laneId, r);
+        while (stack.length) {
+            const id = stack.pop()!;
+            count++;
+            if (visible.get(id)!.node.failed) failures++;
+            g.setNode(id, { width: NODE_WIDTH, height: cardHeight(data.get(id)!) });
+            for (const c of kids.get(id) || []) {
+                g.setEdge(id, c);
+                stack.push(c);
             }
-            currentArg += c;
         }
-        if (currentArg.trim()) args.push(currentArg.trim());
-        args.forEach((arg, idx) => vars.push({ name: `Arg ${idx + 1}`, value: arg }));
+        dagre.layout(g);
+
+        let minX = Infinity, minY = Infinity, maxY = -Infinity;
+        g.nodes().forEach(id => {
+            const p = g.node(id);
+            minX = Math.min(minX, p.x - p.width / 2);
+            minY = Math.min(minY, p.y - p.height / 2);
+            maxY = Math.max(maxY, p.y + p.height / 2);
+        });
+        g.nodes().forEach(id => {
+            const p = g.node(id);
+            positions.set(id, { x: p.x - p.width / 2 - minX, y: p.y - p.height / 2 - minY + yOffset, h: p.height });
+        });
+        // Pin the lane header to the lane's left edge so lanes line up like a document
+        const header = positions.get(laneId)!;
+        header.x = 0;
+
+        lanes.push({
+            id: laneId,
+            roots,
+            data: { line, source: line ? (sourceLines[line - 1] ?? '').trim() : '', count, failures }
+        });
+        yOffset += maxY - minY + LANE_GAP;
+    }
+    return { positions, data, lanes };
+});
+
+function findTreeNode(id: string) {
+    return visibleGraph.value.visible.get(id)?.node ?? null;
+}
+
+/**
+ * Builds the tooltip rows for a node: arguments, result values, phase, status and timing.
+ */
+function parseNodeVars(nodeData: any, nodeId: string) {
+    const vars: { name: string, value: string }[] = [];
+    const { base, args } = splitTemplateName(nodeData.name);
+    vars.push({ name: 'Template', value: base });
+    args.forEach((arg, idx) => vars.push({ name: `Arg ${idx + 1}`, value: arg }));
+
+    for (const [k, val] of Object.entries(nodeData.values || {})) {
+        vars.push({ name: `↪ ${k}`, value: String(val) });
     }
 
-    // Check if node has a computed value (find end step for this id)
-    const endStep = props.steps.find(s => String(s.id) === nodeId && s.type === 'end');
-    if (endStep && endStep.values) {
-        for (const key of Object.keys(endStep.values)) {
-            vars.push({ name: `↪ ${key}`, value: String(endStep.values[key]) });
-        }
-    }
-
-    // Check status
-    const beginIdx = props.steps.findIndex(s => String(s.id) === nodeId && s.type === 'begin');
-    const endIdx = props.steps.findIndex(s => String(s.id) === nodeId && s.type === 'end');
+    const { begin, end } = stepIndexById.value;
+    const endIdx = end.get(nodeId) ?? -1;
+    const beginIdx = begin.get(nodeId) ?? -1;
     if (endIdx >= 0 && endIdx <= props.currentIndex) {
-        vars.push({ name: 'Status', value: '✅ Completed' });
+        vars.push({ name: 'Status', value: nodeData.failed ? '✖ Discarded' : '✅ Completed' });
     } else if (beginIdx >= 0 && beginIdx <= props.currentIndex) {
         vars.push({ name: 'Status', value: '⏳ In Progress' });
     }
 
-    function findNodeRecursive(treeNodes: any[], idToFind: string): any | null {
-        for (const n of treeNodes) {
-            if (String(n.id) === idToFind) return n;
-            const child = findNodeRecursive(n.children || [], idToFind);
-            if (child) return child;
-        }
-        return null;
-    }
-
-    const nodeData = findNodeRecursive(props.tree, nodeId);
-    if (nodeData) {
-        if (nodeData.dur !== undefined) vars.push({ name: 'Duration', value: `${(nodeData.dur / 1000).toFixed(3)} ms` });
-        if (nodeData.failed) {
-            vars.push({ name: 'Error', value: nodeData.failReason || 'Unknown failure' });
-        }
-    }
-
+    const kind = describeKind(nodeData.kindName);
+    if (kind) vars.push({ name: 'Phase', value: kind.tag });
+    if (nodeData.declLine) vars.push({ name: 'Declared at', value: `line ${nodeData.declLine}` });
+    if (nodeData.memoHits) vars.push({ name: 'Reused', value: `${nodeData.memoHits}× from cache` });
+    if (nodeData.dur !== undefined) vars.push({ name: 'Duration', value: `${(nodeData.dur / 1000).toFixed(3)} ms` });
+    if (nodeData.failed) vars.push({ name: 'Error', value: nodeData.failReason || 'Unknown failure' });
     return vars;
 }
 
 const tooltipData = computed(() => {
     const id = tooltipPinned.value ? selectedNodeId.value : hoveredNodeId.value;
     if (!id) return null;
-    function findNodeRecursive(treeNodes: any[], idToFind: string): any | null {
-        for (const n of treeNodes) {
-            if (String(n.id) === idToFind) return n;
-            const child = findNodeRecursive(n.children || [], idToFind);
-            if (child) return child;
-        }
-        return null;
-    }
-    const nodeData = findNodeRecursive(props.tree, id);
+    const nodeData = findTreeNode(id);
     if (!nodeData) return null;
-    const name = nodeData.name;
-    return { name, vars: parseNodeVars(name, id) };
+    return { name: nodeData.name, vars: parseNodeVars(nodeData, id) };
 });
 
 const onNodeClick = (event: any) => {
     const id = String(event.node.id);
+    if (id.startsWith('lane-')) return;
     if (tooltipPinned.value && selectedNodeId.value === id) {
         tooltipPinned.value = false;
         selectedNodeId.value = null;
         hoveredNodeId.value = id;
-    } else {
-        selectedNodeId.value = id;
-        tooltipPinned.value = true;
-        hoveredNodeId.value = null;
-        // Search tree for node location
-        function findNodeRecursive(treeNodes: any[], idToFind: string): any | null {
-            for (const n of treeNodes) {
-                if (String(n.id) === idToFind) return n;
-                const child = findNodeRecursive(n.children || [], idToFind);
-                if (child) return child;
-            }
-            return null;
-        }
-        const nodeData = findNodeRecursive(props.tree, id);
-        if (nodeData && nodeData.line && nodeData.col) {
-            // We set it globally via a new ref in store or emit. We'll use activeLocation.
-            // Wait, activeLocation is currently computed from activeStack.
-            // We can emit a custom event to window or store.
-            window.dispatchEvent(new CustomEvent('editor-highlight', { 
-                detail: { line: nodeData.line, col: nodeData.col }
-            }));
-        }
+        return;
+    }
+    selectedNodeId.value = id;
+    tooltipPinned.value = true;
+    hoveredNodeId.value = null;
+    const nodeData = findTreeNode(id);
+    if (nodeData?.line && nodeData?.col) {
+        window.dispatchEvent(new CustomEvent('editor-highlight', {
+            detail: { line: nodeData.line, col: nodeData.col }
+        }));
     }
 };
 
+const onNodeDoubleClick = (event: any) => {
+    if (String(event.node.id).startsWith('lane-')) return;
+    toggleCollapse(String(event.node.id));
+};
+
 const onNodeMouseEnter = (event: any) => {
-    if (tooltipPinned.value) return;
+    if (tooltipPinned.value || String(event.node.id).startsWith('lane-')) return;
     hoveredNodeId.value = String(event.node.id);
     const domEvent = event.event as MouseEvent;
     tooltipPos.value = { x: domEvent.clientX, y: domEvent.clientY };
@@ -251,7 +355,7 @@ const downloadImage = async () => {
 
     try {
         // Layout constants – must match the dagre setNode() call in the watch()
-        const NODE_W   = 350;
+        const NODE_W   = NODE_WIDTH;
         const BASE_H   = 60;   // dagre-assigned height; we may grow taller for text
         const PADDING  = 80;
         const SCALE    = 3;    // 3× super-sampling → crisp text
@@ -446,179 +550,178 @@ const downloadImage = async () => {
     }
 };
 
-// Rebuild the graph up to the current index
-watch(() => [props.currentIndex, selectedNodeId.value], ([newIndexStr, selected]) => {
-    const newIndex = newIndexStr as number;
-    if (newIndex < 0 || !props.steps || props.steps.length === 0) {
-        nodes.value = [];
-        edges.value = [];
-        return;
+
+/** The node that stands in for the current step (itself, or its nearest visible ancestor). */
+const currentVisibleId = computed(() => {
+    const step = props.steps[props.currentIndex];
+    if (!step) return null;
+    return visibleGraph.value.redirect.get(String(step.id)) ?? null;
+});
+
+function styleFor(n: any, id: string, state: { active: boolean, current: boolean, selected: boolean }) {
+    let bg = THEME.normalFinished.bg, border = THEME.normalFinished.border;
+    let shadow = '0 1px 3px rgba(0,0,0,0.3)';
+    let borderStyle = isDeduction(n.kindName) || n.kindName === 'ExplicitSpecialization' ? 'dashed' : 'solid';
+    const alias = n.isAlias || n.kindName === 'TypeAliasTemplateInstantiation';
+
+    if (state.selected) {
+        bg = THEME.selected.bg; border = THEME.selected.border;
+        shadow = '0 0 15px rgba(124, 58, 237, 0.5)';
+    } else if (n.failed && !state.active) {
+        bg = THEME.failed.bg; border = THEME.failed.border; borderStyle = 'dashed';
+        shadow = '0 0 10px rgba(239, 68, 68, 0.35)';
+    } else if (state.current) {
+        const t = alias ? THEME.aliasCurrent : THEME.normalCurrent;
+        bg = t.bg; border = t.border;
+        shadow = alias ? '0 0 15px rgba(251, 146, 60, 0.5)' : '0 0 15px rgba(59, 130, 246, 0.5)';
+    } else if (state.active) {
+        const t = alias ? THEME.aliasActive : THEME.normalActive;
+        bg = t.bg; border = t.border;
+    } else if (alias) {
+        bg = THEME.aliasFinished.bg; border = THEME.aliasFinished.border;
     }
+    const pos = layout.value.positions.get(id)!;
+    return {
+        background: bg,
+        color: '#fff',
+        border: `2px ${borderStyle} ${border}`,
+        borderRadius: '8px',
+        padding: '0',
+        width: `${NODE_WIDTH}px`,
+        height: `${pos.h}px`,
+        boxShadow: shadow,
+        cursor: 'pointer',
+        opacity: 1
+    };
+}
 
-    const currentNodes: any[] = [];
-    const currentEdges: any[] = [];
-    const activeIds = new Set();
-    const finishedIds = new Set();
-    
-    // We only process steps up to newIndex
-    for (let i = 0; i <= newIndex; i++) {
-        const step = props.steps[i];
-        if (step.type === 'begin') {
-            activeIds.add(step.id);
-        } else if (step.type === 'end') {
-            activeIds.delete(step.id);
-            finishedIds.add(step.id);
-        }
-    }
-
-    // Use Dagre for layout
-    const dagreGraph = new dagre.graphlib.Graph();
-    dagreGraph.setDefaultEdgeLabel(() => ({}));
-    dagreGraph.setGraph({ rankdir: 'TB', ranksep: 60, nodesep: 40 });
-
-    function traverse(nodeData: any, parentId: string | null, parentKind: number | null) {
-        if (!activeIds.has(nodeData.id) && !finishedIds.has(nodeData.id)) {
+// Reveal nodes up to the current step on top of the precomputed layout
+watch(
+    () => [props.currentIndex, selectedNodeId.value, layout.value, graphOptions.value.showReuse, traceReuses.value] as const,
+    ([idx, selected]) => {
+        if (idx < 0 || !props.steps.length) {
+            nodes.value = [];
+            edges.value = [];
             return;
         }
+        const { visible, redirect } = visibleGraph.value;
+        const { begin, end } = stepIndexById.value;
+        const current = currentVisibleId.value;
 
-        const isActive = activeIds.has(nodeData.id);
-        const isCurrent = props.steps[newIndex].id === nodeData.id;
-        const isSelected = selected === String(nodeData.id);
+        const newNodes: any[] = [];
+        const newEdges: any[] = [];
+        const revealed = new Set<string>();
 
-        const nodeIdStr = String(nodeData.id);
-
-        // Add to dagre graph to calculate positions
-        dagreGraph.setNode(nodeIdStr, { width: 350, height: 60 });
-
-        let labelText = nodeData.name;
-        if (finishedIds.has(nodeData.id) && nodeData.value !== undefined) {
-            labelText += ` = ${nodeData.value}`;
-        }
-        const isFinished = finishedIds.has(nodeData.id);
-
-        let bgColor = THEME.normalDefault.bg;
-        let borderColor = THEME.normalDefault.border;
-        let shadow = '0 1px 3px rgba(0,0,0,0.3)';
-        let borderStyle = (nodeData.kind === 3 || nodeData.kind === 4) ? 'dashed' : 'solid';
-
-        if (isSelected) {
-            bgColor = THEME.selected.bg;
-            borderColor = THEME.selected.border;
-            shadow = '0 0 15px rgba(124, 58, 237, 0.5)';
-        } else if (nodeData.failed) {
-            bgColor = THEME.failed.bg;
-            borderColor = THEME.failed.border;
-            borderStyle = 'dashed';
-            shadow = '0 0 10px rgba(239, 68, 68, 0.4)';
-            labelText = '❌ ' + labelText;
-        } else if (nodeData.isAlias) {
-            // Orange theme for aliases
-            labelText = '🏷️ ' + labelText;
-            if (isCurrent) {
-                bgColor = THEME.aliasCurrent.bg;
-                borderColor = THEME.aliasCurrent.border;
-                shadow = '0 0 15px rgba(251, 146, 60, 0.5)';
-            } else if (isActive) {
-                bgColor = THEME.aliasActive.bg;
-                borderColor = THEME.aliasActive.border;
-            } else if (isFinished) {
-                bgColor = THEME.aliasFinished.bg;
-                borderColor = THEME.aliasFinished.border;
-            } else {
-                bgColor = THEME.aliasDefault.bg;
-                borderColor = THEME.aliasDefault.border;
-            }
-        } else if (isCurrent) {
-            bgColor = THEME.normalCurrent.bg;
-            borderColor = THEME.normalCurrent.border;
-            shadow = '0 0 15px rgba(59, 130, 246, 0.5)';
-        } else if (isActive) {
-            bgColor = THEME.normalActive.bg;
-            borderColor = THEME.normalActive.border;
-        } else if (isFinished) {
-            bgColor = THEME.normalFinished.bg;
-            borderColor = THEME.normalFinished.border;
-        }
-
-        currentNodes.push({
-            id: nodeIdStr,
-            position: { x: 0, y: 0 }, // Will be updated by dagre
-            data: { label: labelText },
-            style: {
-                background: bgColor,
-                color: '#fff',
-                border: `2px ${borderStyle} ${borderColor}`,
-                borderRadius: '8px',
-                padding: '10px',
-                fontSize: '11px',
-                fontFamily: 'monospace',
-                width: '350px',
-                boxShadow: shadow,
-                wordBreak: 'break-all',
-                cursor: 'pointer'
-            },
-            sourcePosition: Position.Bottom,
-            targetPosition: Position.Top
-        });
-
-        if (parentId) {
-            dagreGraph.setEdge(parentId, nodeIdStr);
-            
-            let edgeLabel = '';
-            let edgeLabelBg = '';
-            if (parentKind === 3 || parentKind === 4) {
-                edgeLabel = 'Signature deduction';
-                edgeLabelBg = '#1f2937';
-            }
-
-            currentEdges.push({
-                id: `e-${parentId}-${nodeIdStr}`,
-                source: parentId,
-                target: nodeIdStr,
-                type: 'smoothstep',
-                animated: isActive,
-                label: edgeLabel,
-                labelBgStyle: { fill: edgeLabelBg },
-                labelStyle: { fill: '#9ca3af', fontSize: '10px', fontFamily: 'monospace' },
-                style: { stroke: isActive ? '#60a5fa' : '#9ca3af', strokeWidth: 3 },
-                markerEnd: { type: MarkerType.ArrowClosed, color: isActive ? '#60a5fa' : '#9ca3af' }
+        for (const [id, v] of visible) {
+            const b = begin.get(id) ?? Infinity;
+            if (b > idx) continue;
+            revealed.add(id);
+            const e = end.get(id) ?? Infinity;
+            const active = e > idx;
+            const pos = layout.value.positions.get(id)!;
+            newNodes.push({
+                id,
+                type: 'meta',
+                position: { x: pos.x, y: pos.y },
+                data: layout.value.data.get(id),
+                style: styleFor(v.node, id, { active, current: id === current, selected: selected === id }),
+                sourcePosition: Position.Bottom,
+                targetPosition: Position.Top
             });
         }
 
-        for (const child of nodeData.children || []) {
-            traverse(child, nodeIdStr, nodeData.kind);
+        for (const lane of layout.value.lanes) {
+            const shown = lane.roots.filter(r => revealed.has(r));
+            if (shown.length === 0) continue;
+            const pos = layout.value.positions.get(lane.id)!;
+            newNodes.push({
+                id: lane.id,
+                type: 'lane',
+                position: { x: pos.x, y: pos.y },
+                data: lane.data,
+                selectable: false,
+                style: {
+                    width: `${NODE_WIDTH + 80}px`,
+                    height: `${LANE_HEIGHT}px`,
+                    background: 'rgba(30, 41, 59, 0.55)',
+                    border: '1px solid #334155',
+                    borderLeft: '3px solid #60a5fa',
+                    borderRadius: '6px',
+                    padding: '0',
+                    color: '#e5e7eb',
+                    opacity: 1
+                }
+            });
+            for (const r of shown) {
+                newEdges.push({
+                    id: `l-${lane.id}-${r}`,
+                    source: lane.id,
+                    target: r,
+                    type: 'smoothstep',
+                    style: { stroke: '#475569', strokeWidth: 1.5, strokeDasharray: '4 4' },
+                    data: { lane: true }
+                });
+            }
         }
-    }
 
-    for (const root of props.tree) {
-        traverse(root, null, null);
-    }
+        for (const [id, v] of visible) {
+            if (!revealed.has(id) || !v.visParentId || !revealed.has(v.visParentId)) continue;
+            const active = (end.get(id) ?? Infinity) > idx;
+            const parent = visible.get(v.visParentId)!.node;
+            newEdges.push({
+                id: `e-${v.visParentId}-${id}`,
+                source: v.visParentId,
+                target: id,
+                type: 'smoothstep',
+                animated: active,
+                label: isDeduction(parent.kindName) ? 'signature deduction' : '',
+                labelBgStyle: { fill: '#1f2937' },
+                labelStyle: { fill: '#9ca3af', fontSize: '10px', fontFamily: 'monospace' },
+                style: { stroke: active ? '#60a5fa' : '#9ca3af', strokeWidth: 2.5 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: active ? '#60a5fa' : '#9ca3af' },
+                data: { tree: true }
+            });
+        }
 
-    // Execute dagre layout
-    dagre.layout(dagreGraph);
+        if (graphOptions.value.showReuse) {
+            const seen = new Set<string>();
+            for (const r of traceReuses.value) {
+                const s = redirect.get(String(r.sourceId));
+                const t = redirect.get(String(r.targetId));
+                if (!s || !t || s === t || !revealed.has(s) || !revealed.has(t)) continue;
+                const key = `${s}->${t}`;
+                if (seen.has(key) || visible.get(t)?.visParentId === s) continue;
+                seen.add(key);
+                newEdges.push({
+                    id: `r-${key}`,
+                    source: s,
+                    target: t,
+                    sourceHandle: 'reuse-out',
+                    targetHandle: 'reuse-in',
+                    type: 'reuse',
+                    label: 'reused',
+                    labelBgStyle: { fill: '#1e1b4b' },
+                    labelStyle: { fill: '#c4b5fd', fontSize: '10px', fontFamily: 'monospace' },
+                    style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '2 4' },
+                    markerEnd: { type: MarkerType.Arrow, color: '#a78bfa' },
+                    data: { reuse: true }
+                });
+            }
+        }
 
-    // Update node positions
-    currentNodes.forEach(node => {
-        const nodeWithPosition = dagreGraph.node(node.id);
-        node.position = {
-            x: nodeWithPosition.x - nodeWithPosition.width / 2,
-            y: nodeWithPosition.y - nodeWithPosition.height / 2
-        };
-    });
-
-    nodes.value = currentNodes;
-    edges.value = currentEdges;
-}, { immediate: true });
+        nodes.value = newNodes;
+        edges.value = newEdges;
+    },
+    { immediate: true }
+);
 
 function centerOnCurrentStep() {
-    const currentStepId = props.steps[props.currentIndex]?.id;
-    if (currentStepId !== undefined) {
-      const isCurrent = nodes.value.find(n => n.id === String(currentStepId));
-      if (isCurrent) {
-          setCenter(isCurrent.position.x + 175, isCurrent.position.y + 30, { zoom: 1.1, duration: 800 });
-      } else {
-          fitView({ padding: 0.2, duration: 800 });
-      }
+    const id = currentVisibleId.value;
+    const pos = id ? layout.value.positions.get(id) : undefined;
+    if (pos) {
+        setCenter(pos.x + NODE_WIDTH / 2, pos.y + pos.h / 2, { zoom: 1.1, duration: 600 });
+    } else {
+        fitView({ padding: 0.2, duration: 600 });
     }
 }
 
@@ -628,86 +731,134 @@ onNodesInitialized(() => {
 
 function updateHighlights() {
     const targetId = hoveredNodeId.value || selectedNodeId.value;
+    const treeEdges = edges.value.filter(e => e.data?.tree);
     if (!targetId) {
-        nodes.value.forEach(n => {
-            if (n.style) n.style.opacity = 1.0;
-        });
-        edges.value.forEach(e => {
-            if (e.style) {
-                e.style.opacity = 1.0;
-                e.style.stroke = e.animated ? '#60a5fa' : '#9ca3af';
-            }
-        });
+        nodes.value.forEach(n => { if (n.style) n.style.opacity = 1.0; });
+        edges.value.forEach(e => { if (e.style) e.style.opacity = 1.0; });
         return;
     }
 
+    // Highlight the causal chain: the node and every ancestor that led to it
     const path = new Set<string>();
-    let curr = targetId;
+    let curr: string | undefined = targetId;
     while (curr) {
         path.add(curr);
-        const edge = edges.value.find(e => e.target === curr);
-        if (edge) curr = edge.source;
-        else break;
+        curr = treeEdges.find(e => e.target === curr)?.source;
     }
 
-    nodes.value.forEach(n => {
-        if (n.style) {
-            n.style.opacity = path.has(n.id) ? 1.0 : 0.2;
-        }
-    });
-
+    nodes.value.forEach(n => { if (n.style) n.style.opacity = path.has(n.id) || n.type === 'lane' ? 1.0 : 0.25; });
     edges.value.forEach(e => {
-        if (e.style) {
-            const inPath = path.has(e.source) && path.has(e.target);
-            e.style.opacity = inPath ? 1.0 : 0.15;
-            e.style.stroke = inPath ? (e.animated ? '#60a5fa' : '#93c5fd') : '#4b5563';
-        }
+        if (!e.style) return;
+        const inPath = e.data?.reuse ? e.source === targetId : path.has(e.source) && path.has(e.target);
+        e.style.opacity = inPath ? 1.0 : 0.12;
     });
 }
 
 watch([hoveredNodeId, selectedNodeId, nodes], () => {
     updateHighlights();
-}, { deep: true });
+});
 
-watch(() => [props.steps, props.currentIndex, props.tree], () => {
-  // Only pan when stepping, not when selecting
-  setTimeout(() => {
-    centerOnCurrentStep();
-  }, 50);
+watch(() => [props.currentIndex, props.tree], () => {
+    // Only pan when stepping, not when selecting
+    setTimeout(() => centerOnCurrentStep(), 50);
+});
+
+// Search: Enter cycles through nodes whose name matches
+const searchQuery = ref('');
+const searchMatches = computed(() => {
+    const q = searchQuery.value.trim().toLowerCase();
+    if (!q) return [] as string[];
+    const out: string[] = [];
+    for (const [id, v] of visibleGraph.value.visible) if (v.node.name.toLowerCase().includes(q)) out.push(id);
+    return out;
+});
+const searchCursor = ref(0);
+watch(searchQuery, () => { searchCursor.value = 0; });
+const gotoMatch = async () => {
+    if (searchMatches.value.length === 0) return;
+    const id = searchMatches.value[searchCursor.value % searchMatches.value.length];
+    searchCursor.value++;
+    await focusNode(id);
+    tooltipPinned.value = true;
+    const pos = layout.value.positions.get(id);
+    if (pos) setCenter(pos.x + NODE_WIDTH / 2, pos.y + pos.h / 2, { zoom: 1.1, duration: 500 });
+};
+
+const hiddenByFilters = computed(() => {
+    let total = 0;
+    const walk = (list: any[]) => { for (const n of list) { total++; walk(n.children || []); } };
+    walk(props.tree);
+    return total - visibleGraph.value.visible.size;
 });
 
 const graphContainer = ref<HTMLElement | null>(null);
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
-  if (graphContainer.value) {
-    resizeObserver = new ResizeObserver(() => {
-      // Re-center when the container resizes
-      setTimeout(() => {
-        centerOnCurrentStep();
-      }, 50);
-    });
-    resizeObserver.observe(graphContainer.value);
-  }
+    if (graphContainer.value) {
+        resizeObserver = new ResizeObserver(() => {
+            setTimeout(() => centerOnCurrentStep(), 50);
+        });
+        resizeObserver.observe(graphContainer.value);
+    }
 });
 
 const isLegendExpanded = ref(false);
+const showViewMenu = ref(false);
 
 onUnmounted(() => {
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
+    if (resizeObserver) resizeObserver.disconnect();
 });
 
 </script>
 
 <template>
   <div class="h-full w-full relative" ref="graphContainer">
-    
+
+    <!-- Top-Left: view menu and search -->
+    <div data-tour="graph-toolbar" class="absolute top-2 left-2 z-10 flex items-center gap-1.5 text-xs">
+        <div class="relative">
+            <button class="graph-toggle" @click="showViewMenu = !showViewMenu" :aria-expanded="showViewMenu">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M6 12h12M10 20h4"/></svg>
+                View
+                <span v-if="hiddenByFilters > 0" class="text-gray-500">· {{ hiddenByFilters }} hidden</span>
+                <span class="text-gray-500">▾</span>
+            </button>
+            <div v-if="showViewMenu" class="fixed inset-0 z-10" @click="showViewMenu = false"></div>
+            <div v-if="showViewMenu" class="absolute left-0 top-full mt-1 z-20 w-64 bg-gray-800 border border-gray-700 rounded shadow-xl p-1.5 text-gray-200">
+                <label class="view-item" title="Hide compiler bookkeeping (parameter mapping, constraint normalization, internal checks). Failures are always shown.">
+                    <input type="checkbox" v-model="graphOptions.simple" />
+                    <span>Simple view <span class="block text-[10px] text-gray-500">Hide compiler bookkeeping steps</span></span>
+                </label>
+                <label class="view-item">
+                    <input type="checkbox" v-model="graphOptions.hideStd" />
+                    <span>Hide std internals <span class="block text-[10px] text-gray-500">Only templates declared in your code</span></span>
+                </label>
+                <label class="view-item">
+                    <input type="checkbox" v-model="graphOptions.showReuse" />
+                    <span>Reuse edges <span class="block text-[10px] text-gray-500">Dotted ♻ arcs for cache hits</span></span>
+                </label>
+                <div class="border-t border-gray-700 my-1"></div>
+                <button class="view-item w-full" @click="collapseAll(); showViewMenu = false">Collapse all subtrees</button>
+                <button class="view-item w-full" @click="expandAll(); showViewMenu = false">Expand all</button>
+            </div>
+        </div>
+        <div class="flex items-center bg-gray-800/90 border border-gray-700 rounded">
+            <svg class="w-3.5 h-3.5 ml-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/></svg>
+            <input
+                v-model="searchQuery"
+                @keydown.enter="gotoMatch"
+                placeholder="Find template…"
+                class="bg-transparent px-2 py-1 w-40 text-gray-200 outline-none placeholder:text-gray-500"
+            />
+            <span v-if="searchQuery" class="px-1.5 text-gray-500 tabular-nums">{{ searchMatches.length }}</span>
+        </div>
+    </div>
+
     <!-- Top-Right Controls overlay for Graph specific actions -->
     <div class="absolute top-2 right-2 z-10 flex space-x-2">
-        <button 
-            @click="downloadImage" 
+        <button
+            @click="downloadImage"
             :disabled="isExporting || nodes.length === 0"
             class="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 border border-gray-700 text-xs px-2 py-1 rounded shadow flex items-center transition-colors"
             title="Export full graph as high-resolution PNG"
@@ -736,6 +887,13 @@ onUnmounted(() => {
                     }"></div>
                     {{ item.label }}
                 </div>
+                <div class="text-[11px] text-gray-500 mt-1 leading-snug">
+                    Badges: <span class="text-blue-300">class / function body</span> = instantiated,
+                    <span class="text-violet-300">candidate</span> = overload being tried,
+                    <span class="text-cyan-300">concept check</span>,
+                    <span class="text-emerald-300">base case</span> = explicit specialization.
+                    Double-click a node to collapse it.
+                </div>
             </div>
         </div>
     </div>
@@ -743,14 +901,19 @@ onUnmounted(() => {
     <VueFlow
       :nodes="nodes"
       :edges="edges"
+      :node-types="nodeTypes"
+      :edge-types="edgeTypes"
       @node-click="onNodeClick"
+      @node-double-click="onNodeDoubleClick"
       @node-mouse-enter="onNodeMouseEnter"
       @node-mouse-leave="onNodeMouseLeave"
       @pane-click="onPaneClick"
       class="vue-flow-dark"
       :default-viewport="{ zoom: 1 }"
-      :min-zoom="0.1"
+      :min-zoom="0.05"
       :max-zoom="4"
+      :nodes-draggable="false"
+      :zoom-on-double-click="false"
     >
       <Background pattern-color="#374151" :gap="20" />
       <Controls :showInteractive="false" />
@@ -764,7 +927,7 @@ onUnmounted(() => {
         :class="{ 'pinned': tooltipPinned }"
         :style="{
           left: tooltipPinned ? '12px' : (tooltipPos.x + 16) + 'px',
-          top: tooltipPinned ? '12px' : (tooltipPos.y - 20) + 'px',
+          top: tooltipPinned ? '44px' : (tooltipPos.y - 20) + 'px',
           position: tooltipPinned ? 'absolute' : 'fixed'
         }"
       >
@@ -785,6 +948,31 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.graph-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(31, 41, 55, 0.9);
+  border: 1px solid #374151;
+  color: #d1d5db;
+  cursor: pointer;
+  user-select: none;
+}
+.graph-toggle:hover { background: #374151; }
+.graph-toggle input { accent-color: #3b82f6; }
+.view-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.view-item:hover { background: #374151; }
+.view-item input { margin-top: 2px; accent-color: #3b82f6; }
 .node-tooltip {
   z-index: 1000;
   pointer-events: none;
