@@ -15,7 +15,7 @@ import '@vue-flow/controls/dist/style.css';
 import dagre from 'dagre';
 import {
     selectedNodeId, focusNode, graphOptions, visibleGraph, stepIndexById,
-    traceReuses, collapseAll, expandAll, toggleCollapse, code
+    traceReuses, collapseAll, expandAll, toggleCollapse, toggleChain, code
 } from '../store';
 import { describeKind, isDeduction, splitTemplateName } from '../kinds';
 import MetaNode from './MetaNode.vue';
@@ -86,8 +86,9 @@ function phaseLabelOf(n: any): string {
     return describeKind(n.kindName)?.tag ?? 'step';
 }
 
+/** What this step computed: constexpr values from the user's code, else `value` / `type` results. */
 function resultOf(n: any): string | undefined {
-    const entries = Object.entries(n.values || {});
+    const entries = Object.entries({ ...(n.results || {}), ...(n.values || {}) });
     if (entries.length === 0) return undefined;
     return entries.slice(0, 2).map(([k, v]) => `${k} = ${v}`).join(', ');
 }
@@ -99,15 +100,20 @@ function cardHeight(d: MetaNodeData): number {
         const chars = d.args.slice(0, 4).reduce((s, a) => s + Math.min(a.length, 38) + 3, 0);
         h += 6 + 18 * Math.max(1, Math.ceil(chars / 40));
     }
+    if (d.chain) h += 24;
     if (d.result || d.reuse || d.collapsed) h += 22;
     if (d.reason) h += 36;
     return h;
 }
 
-function buildNodeData(n: any, v: { childCount: number, hiddenCount: number }, collapsed: boolean): MetaNodeData {
+function buildNodeData(n: any, v: { childCount: number, hiddenCount: number, chain?: any[] }, collapsed: boolean): MetaNodeData {
     const { base, args } = splitTemplateName(n.name);
+    const chain = v.chain
+        ? { levels: v.chain.length, steps: v.chain.map((m: any) => splitTemplateName(m.name).args.join(', ')) }
+        : undefined;
     return {
-        label: n.name,
+        chain,
+        label: chain ? `${n.name} … ${v.chain![v.chain!.length - 1].name}` : n.name,
         base,
         args,
         phase: phaseLabelOf(n),
@@ -275,8 +281,10 @@ const onNodeClick = (event: any) => {
 };
 
 const onNodeDoubleClick = (event: any) => {
-    if (String(event.node.id).startsWith('lane-')) return;
-    toggleCollapse(String(event.node.id));
+    const id = String(event.node.id);
+    if (id.startsWith('lane-')) return;
+    if (visibleGraph.value.visible.get(id)?.chain) toggleChain(id);
+    else toggleCollapse(id);
 };
 
 const onNodeMouseEnter = (event: any) => {
@@ -833,6 +841,10 @@ onUnmounted(() => {
                 <label class="view-item">
                     <input type="checkbox" v-model="graphOptions.hideStd" />
                     <span>Hide std internals <span class="block text-[10px] text-gray-500">Only templates declared in your code</span></span>
+                </label>
+                <label class="view-item">
+                    <input type="checkbox" v-model="graphOptions.collapseChains" />
+                    <span>Fold recursion <span class="block text-[10px] text-gray-500">Show Fib&lt;12&gt; → … → Fib&lt;2&gt; as one card</span></span>
                 </label>
                 <label class="view-item">
                     <input type="checkbox" v-model="graphOptions.showReuse" />

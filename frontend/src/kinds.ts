@@ -96,7 +96,7 @@ export function isNoise(node: { kindName?: string; entityKind?: string; internal
 }
 
 const TYPE_SUGAR: [RegExp, string][] = [
-  [/std::basic_string<char, std::char_traits<char>, std::allocator<char>\s*>/g, 'std::string'],
+  [/(?:std::)?basic_string<char, std::char_traits<char>, std::allocator<char>\s*>/g, 'std::string'],
   [/std::basic_string<char>/g, 'std::string'],
   [/std::basic_string_view<char, std::char_traits<char>\s*>/g, 'std::string_view'],
   [/std::basic_string_view<char>/g, 'std::string_view'],

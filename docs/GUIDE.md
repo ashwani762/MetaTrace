@@ -124,10 +124,11 @@ Each card is one compiler step:
 ### Controls
 
 - **Click** a card: select it. The Inspector explains it and the editor jumps to its line.
-- **Double-click** a card (or its ▾): collapse or expand its subtree.
+- **Double-click** a card (or its ▾): collapse or expand its subtree. On a folded recursion card, double-click (or **expand**) shows every level.
 - **View ▾**
   - **Simple view** (on by default): hides compiler bookkeeping such as constraint normalization, parameter mapping and internal partial-specialization checks. Failures are never hidden.
   - **Hide std internals:** hides templates not declared in your file.
+  - **Fold recursion** (on by default): a template instantiating itself three or more times in a row, such as `Fib<12> → Fib<11> → … → Fib<2>`, is shown as one card. The card lists the argument at each level (`↻ 11 levels ‹12› → ‹11› → … → ‹2›`); base cases and other work stay attached to it.
   - **Reuse edges:** toggles the ♻ arcs.
   - **Collapse all** / **Expand all.**
 - **Find template…**: type a name and press Enter to cycle through matches.
@@ -142,17 +143,36 @@ For the selected card, or the current timeline step:
 - **Outcome:** the SFINAE or constraint reason if it was discarded.
 - **Why is this here?:** the causal chain from your code down to this step, with each triggering source line.
 - **Template arguments:** arguments that changed relative to a recursive caller are highlighted (*was 11 in the caller*).
-- **Computed at compile time:** `constexpr` values and member types.
+- **Computed at compile time:** `constexpr` values, plus the `value` / `type` a specialization produces. This includes library traits and alias templates, e.g. `std::is_integral<char>` → `value = true` and `std::conditional_t<false, long, int>` → `type = int`. Cards show the same result (`⇒ type = int`).
+- **Why it lost** (viable overload candidates only): the rule Clang used to prefer another candidate, with a per-argument comparison. See [Overload ranking](#overload-ranking).
+- **Constraints** (constrained candidates): the full constraint tree, described below.
 - **Which specialization was used:** the primary template and all partial specializations, with the winner marked.
 - **Further steps** and **Cost** (self and total time, cache reuse).
 
 ### Overloads & Specializations
 - **One block per call site.** Each candidate appears as:
   - ✔ **Selected**
-  - ○ **Viable, not chosen** (a better candidate won)
+  - ○ **Viable, not chosen**, with the reason it lost (see below)
+  - ✖ **Not viable**: deduction succeeded, but the arguments cannot bind (e.g. an lvalue passed to `T&&`)
   - ✖ **Rejected (SFINAE)**, with Clang's suppressed diagnostic
   - ⊘ **Constraints not satisfied**, naming the concept or requirement that failed, e.g. `'c.begin()' is invalid (member reference base type 'int' is not a structure or union)`
+- **Constraint tree** (▸ on constrained candidates): see below.
 - **Class template specialization:** which pattern each specialization matched.
+
+#### Overload ranking
+When several template candidates are viable, the losing ones show why they lost. These are Clang's own ordering rules, evaluated after parsing:
+
+| Reason | Meaning |
+|---|---|
+| needs a worse conversion | Another candidate needs a cheaper conversion (exact match > promotion > conversion) for some argument |
+| worse reference binding | Same conversions, but the winner binds an rvalue to `T&&`, which beats `const T&` |
+| less specialized | Both match equally well; partial ordering found the winner more specialized (`f(T*)` over `f(T)`) |
+| less constrained | Same signature; the winner's constraints subsume this one's (`std::signed_integral` over `std::integral`) |
+| a non-template function won | A non-template matching equally well is preferred over any template |
+| arguments cannot bind | Not viable at all, for example an lvalue argument and an rvalue-reference parameter |
+
+#### Constraint tree
+For a constrained candidate (C++20 concepts / requires-clauses), the tree shows how Clang evaluated the constraints. It has **all of** (`&&`) and **any of** (`||`) groups, concept-ids expanded into their definitions, and atomic constraints. Each node is marked ✔ satisfied, ✖ not satisfied (with the reason, such as `'sizeof(double) <= 4' evaluated to false`), or · not evaluated because evaluation short-circuited.
 - Only template candidates are traced. Non-template overloads also take part in resolution but aren't listed.
 
 ### Template Hotspots
@@ -192,7 +212,7 @@ Each example shows a tip telling you what to look at.
 | ↑ | Step out to the parent |
 | Space | Play / pause |
 | Enter (in Find) | Next matching template |
-| Double-click a card | Collapse / expand subtree |
+| Double-click a card | Collapse / expand subtree, or expand a folded recursion chain |
 | Esc (during the tour) | Skip the tour |
 
 ## 8. How it works
@@ -206,14 +226,28 @@ Each example shows a tip telling you what to look at.
  Editor ◀── WebSocket /lsp ───── clangd (autocomplete, hover)
 ```
 
-### Visualizer (`backend/plugin/Visualizer.cpp`)
+### Visualizer (`backend/plugin/`)
 A standalone Clang tool built against LLVM 22. It hooks `Sema`'s template instantiation callbacks and records every code-synthesis context started from the main file.
+
+| Source | Responsibility |
+|---|---|
+| `Visualizer.cpp` | Entry point: tool setup, builtin-header lookup, the AST consumer |
+| `src/InstantiationTracer.*` | The Sema callback that builds the causal trace |
+| `src/Constraints.*` | Constraint failure descriptions and constraint trees |
+| `src/CompileTimeValues.*` | `constexpr` values and the `value` / `type` results of specializations and aliases |
+| `src/OverloadRanking.*` | Why each losing viable candidate lost (conversions, binding, partial ordering, constraints) |
+| `src/TraceModel.*` | Trace data (nodes, events, reuses) |
+| `src/TraceWriter.*` | JSON output |
+| `src/ClangHelpers.*` | Naming and classification helpers |
+
 - **Causal nesting:** work done inside static data member initializers (e.g. `Fib<N>::value`) is attributed to the owning specialization.
 - **SFINAE:** at the end of a substitution context it asks `Sema::getSFINAEContext()` whether an error was trapped, and reads the suppressed diagnostic from the `TemplateDeductionInfo`.
 - **Concepts:** after deduction it inspects `TemplateDeductionInfo::AssociatedConstraintsSatisfaction` and names the failing atomic constraint, concept, or requires-expression requirement.
 - **Cache reuse and base cases:** `Memoization` contexts become reuse events. Lookups of explicit specializations become base-case nodes.
 - **Partial specialization:** for each class specialization it records all partial specializations and the chosen one.
-- **Values:** after parsing, a `RecursiveASTVisitor` evaluates `constexpr` variables and records aliases and typedefs.
+- **Values:** after parsing, a `RecursiveASTVisitor` evaluates `constexpr` variables and records aliases and typedefs. For traced specializations, Sema lookup finds `value` / `type` (through base classes), and alias templates are re-substituted to report the type they produce.
+- **Overload ranking:** after parsing, each call site with several viable template candidates is compared per argument (value category, conversion rank, reference binding). Then `Sema::getMoreSpecializedTemplate` and `Sema::IsAtLeastAsConstrained` decide the remaining ties.
+- **Constraint trees:** the candidate's associated constraints are walked as `&&` / `||` / concept-id / atom, and Clang's recorded failures are matched back by source location. Short-circuiting then tells which atoms were evaluated.
 - **Builtin headers:** it looks for Clang's builtin headers in `$METATRACE_RESOURCE_DIR`, then `./clang-resource` next to the binary, then the build machine's LLVM. This lets packaged binaries run anywhere.
 
 ### Trace format (`trace_custom.json`)
@@ -231,12 +265,16 @@ A standalone Clang tool built against LLVM 22. It hooks `Sema`'s template instan
     "failed": false, "failKind": "sfinae", "failReason": "...",
     "internal": false,                   // compiler bookkeeping on dependent types
     "specCandidates": [{ "pattern": "Box<T *>", "line": 6, "chosen": true }],
+    "results": { "value": "true", "type": "int" },   // computed members / alias result
+    "constraints": { "kind": "or", "text": "any of", "result": "false", "children": [ /* ... */ ] },
     "desugaredCode": "struct Fib<3> { ... }"
   }],
   "events":   [{ "type": "Enter", "nodeId": 5 }, { "type": "Leave", "nodeId": 5 }],
   "reuses":   [{ "parentId": 4, "detail": "Fib<2>", "line": 2, "col": 81 }],
   "memoHits": { "Fib<2>": 2 },
-  "values":   { "Fib<3>::value": "2" }
+  "values":   { "Fib<3>::value": "2" },
+  "rankings": [{ "line": 14, "col": 5, "reason": "moreSpecialized", "winner": "pick(int *)", "loser": "pick(int *)",
+                 "winnerDeclLine": 4, "loserDeclLine": 3, "details": ["argument 1 (rvalue int *): ..."] }]
 }
 ```
 
@@ -244,7 +282,7 @@ A standalone Clang tool built against LLVM 22. It hooks `Sema`'s template instan
 - `store.ts`: ingests the trace in linear time (deduplication, time-travel steps, causal tree). It also holds the derived views: overloads, specializations, hotspots, line heat, diagnostics, graph filtering and playback.
 - `kinds.ts`: descriptions of all Clang synthesis kinds, the noise filter, and name prettifying (`std::string`, `lambda@78:17`).
 - `components/Graph.vue`: swimlane layout (dagre per lane), card rendering (`MetaNode.vue`, `LaneNode.vue`) and reuse arcs (`ReuseEdge.vue`).
-- `InspectorPanel.vue`, `OverloadPanel.vue`, `HotspotsPanel.vue`, `OutputPanel.vue`, `TourOverlay.vue`: the panels described above.
+- `InspectorPanel.vue`, `OverloadPanel.vue`, `HotspotsPanel.vue`, `OutputPanel.vue`, `TourOverlay.vue`: the panels described above. `ConstraintTree.vue` renders constraint trees.
 - Layout: Golden Layout. Editor: Monaco with an LSP bridge to clangd.
 
 ## 9. Building from source
@@ -303,7 +341,7 @@ Open http://localhost:5173. Vite proxies `/api` and `/lsp` to the backend.
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Plugin integration | `cd backend && npx jest` | Runs the real Visualizer on classes, functions, SFINAE (including rejection reasons), concepts, variadics, header noise and recursive nesting |
+| Plugin integration | `cd backend && npx jest` | Runs the real Visualizer on classes, functions, SFINAE (including rejection reasons), concepts, variadics, header noise, recursive nesting, overload ranking reasons, constraint trees and computed results |
 | Frontend unit | `cd frontend && npm test` | Name parsing, prettifying and the noise filter (Node's built-in test runner) |
 | Type-check + build | `cd frontend && npm run build` | `vue-tsc` + Vite production build |
 | Packaged smoke test | `node scripts/smoke_test.js release/MetaTrace[.exe]` | Starts the packaged binary, traces a program using `<vector>`/`<string>`/`<type_traits>`, and checks recursion, base cases, SFINAE reasons and `constexpr` values |
@@ -345,7 +383,7 @@ git push origin v1.0.0
 
 Good areas to help with:
 - Tracing projects with several files or a `compile_commands.json`
-- A constraint tree view that expands `A && (B || C)` with each atom's result
 - Diffing two traces to catch compile-time regressions
-- Automatically collapsing long recursion chains
+- Stepping backwards from a compiler error through the instantiations that caused it
+- A mini-map and side-by-side graphs for very large traces
 - macOS packaging

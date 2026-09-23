@@ -6,11 +6,22 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { inspectedNode, nodeIndex, code, focusNode, currentStepIndex, stepIndexById } from '../store';
+import { inspectedNode, nodeIndex, code, focusNode, currentStepIndex, stepIndexById, traceRankings } from '../store';
+import ConstraintTree from './ConstraintTree.vue';
 import { describeKind, isDeduction, splitTemplateName } from '../kinds';
 
 const sourceLines = computed(() => code.value.split('\n'));
 const sourceAt = (line?: number) => (line ? (sourceLines.value[line - 1] ?? '').trim() : '');
+
+const RANKING_TEXT: Record<string, string> = {
+  conversion: 'The chosen candidate needs a better (cheaper) conversion for at least one argument.',
+  referenceBinding: 'Same conversions, but the chosen candidate binds an rvalue argument to an rvalue reference, which is preferred.',
+  moreSpecialized: 'Both match equally well; partial ordering picked the more specialized template.',
+  moreConstrained: 'Both match equally well and neither is more specialized; the chosen template is more constrained.',
+  nonTemplate: 'A non-template function that matches equally well is preferred over a template.',
+  notViable: 'The deduced signature cannot accept these arguments (for example an lvalue passed to T&&).',
+  unknown: 'Clang ranked another candidate higher.'
+};
 
 const fmt = (us: number) => us >= 1000 ? `${(us / 1000).toFixed(2)} ms` : `${Math.round(us)} µs`;
 
@@ -60,6 +71,16 @@ const info = computed(() => {
     outcome = { tone: 'ok', text: 'Substitution succeeded; this candidate stayed viable for overload resolution.' };
   }
 
+  // If it was viable but another candidate won, Clang's ranking explains why
+  const ranking = isDeduction(n.kindName) && !n.failed
+    ? traceRankings.value.find(r => r.line === n.line && r.col === n.col && r.loserDeclLine === n.declLine)
+    : undefined;
+  if (ranking) {
+    outcome = ranking.reason === 'notViable'
+      ? { tone: 'fail', text: 'Deduction succeeded, but the arguments cannot bind to its parameters, so it is not viable.' }
+      : { tone: 'warn', text: `Viable, but ${ranking.winner} was chosen instead.` };
+  }
+
   // Why is this here? Walk up the causal chain to the code that started it
   const chain: any[] = [];
   let cur: any = entry;
@@ -84,7 +105,8 @@ const info = computed(() => {
 
   return {
     n, base, kindLabel, headline, outcome, chain, argRows, finished,
-    values: Object.entries(n.values || {}),
+    values: Object.entries({ ...(n.results || {}), ...(n.values || {}) }),
+    ranking,
     children: n.children || [],
     selfUs: Math.max(0, (n.dur || 0) - childTime),
     totalUs: n.dur || 0
@@ -155,6 +177,21 @@ const info = computed(() => {
         <div v-for="[k, v] in info.values" :key="k" class="font-mono">
           <span class="text-blue-300">{{ k }}</span> <span class="text-gray-500">=</span> <span class="text-emerald-300">{{ v }}</span>
         </div>
+      </section>
+
+      <!-- Why another overload won -->
+      <section v-if="info.ranking">
+        <h3 class="section-title">Why it lost</h3>
+        <p class="text-gray-200">{{ RANKING_TEXT[info.ranking.reason] ?? 'Another candidate was a better match.' }}</p>
+        <ul class="mt-1 space-y-0.5 list-disc pl-4 font-mono text-[11px] text-gray-400">
+          <li v-for="(d, i) in info.ranking.details" :key="i" class="break-words">{{ d }}</li>
+        </ul>
+      </section>
+
+      <!-- Constraint tree (C++20 concepts / requires-clauses) -->
+      <section v-if="info.n.constraints">
+        <h3 class="section-title">Constraints</h3>
+        <ConstraintTree :node="info.n.constraints" />
       </section>
 
       <!-- Specialization matching -->

@@ -18,9 +18,10 @@ MetaTrace compiles your code with an embedded Clang and records **every template
 
 | | |
 |---|---|
-| **Instantiation graph** | One card per compiler step, grouped under the line of your code that caused it. Results (`value = 55`), cache reuse (♻) and base cases are shown on the card. |
+| **Instantiation graph** | One card per compiler step, grouped under the line of your code that caused it. Results appear on the card (`value = 55`, `type = int`), along with cache reuse (♻) and base cases. Recursion folds into one card (`↻ 11 levels ‹12› → … → ‹2›`). |
 | **Inspector** | Explains any step in plain English: what happened, *why it is there* (the chain back to your code), which arguments changed, and what it cost. |
-| **Overloads & specializations** | Every candidate for every call: selected, rejected by **SFINAE** or discarded by unmet **concepts**, with Clang's exact reason. It also shows which partial specialization matched. |
+| **Overloads & specializations** | Every candidate for every call: selected, rejected by **SFINAE**, or discarded by unmet **concepts**, with Clang's exact reason. For viable losers it gives the ranking rule that decided it (*less specialized*, *less constrained*, *worse reference binding*…). It also shows which partial specialization matched. |
+| **Constraint trees** | See how `(Number<T> && Small<T>) \|\| is_pointer_v<T>` was evaluated: every concept expanded, each atom marked satisfied, failed or short-circuited. |
 | **Template hotspots** | Templates ranked by compile time, with instantiation counts, cache reuse and recursion depth. |
 | **Time travel** | Scrub or play the compilation step by step (← → ↑ ↓, Space). |
 | **Readable at scale** | Simple view hides compiler bookkeeping, *Hide std internals*, collapsible subtrees, search. Tested on real code using `tuple`, `variant`, ranges and concepts. |

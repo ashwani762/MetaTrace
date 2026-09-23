@@ -183,6 +183,7 @@ app.post('/api/compile', async (req, res) => {
         values: traceDataObj.values,
         memoHits: traceDataObj.memoHits || {},
         reuses: traceDataObj.reuses || [],
+        rankings: traceDataObj.rankings || [],
         output: traceResult.stdout,
         stderr: traceResult.stderr
     });

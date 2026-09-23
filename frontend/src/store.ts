@@ -40,6 +40,19 @@ export const currentStepIndex = ref(-1)  // Current position in the time-travel 
 // Requests for specializations that already existed (memoized), as edges requester -> existing node
 export const traceReuses = ref<{ sourceId: number, targetId: number, line: number, col: number }[]>([])
 
+/** Why a viable overload candidate lost at a call site (from Clang's own ordering rules). */
+export interface OverloadRanking {
+  line: number;
+  col: number;
+  reason: 'conversion' | 'referenceBinding' | 'moreSpecialized' | 'moreConstrained' | 'nonTemplate' | 'notViable' | 'unknown';
+  winner: string;
+  loser: string;
+  winnerDeclLine: number;
+  loserDeclLine: number;
+  details: string[];
+}
+export const traceRankings = ref<OverloadRanking[]>([])
+
 // The ID of the currently selected/hovered node in the graph
 export const selectedNodeId = ref<string | null>(null)
 
@@ -217,6 +230,7 @@ export const resetVisualizer = () => {
   traceSteps.value = [];
   treeData.value = [];
   traceReuses.value = [];
+  traceRankings.value = [];
   currentStepIndex.value = -1;
   selectedNodeId.value = null;
 };
@@ -308,6 +322,8 @@ function ingestTrace(data: any) {
     declLine: n.declLine,
     memoHits: n.memoHits,
     specCandidates: n.specCandidates,
+    constraints: n.constraints,
+    results: n.results ? normalizeKeys(n.results) : undefined,
     desugaredCode: n.desugaredCode,
     values: valuesByOwner.get(n.detail) || {},
     children: [] as any[]
@@ -384,6 +400,12 @@ export const compileCode = async () => {
         traceSteps.value = steps;
         treeData.value = tree;
         traceReuses.value = reuses;
+        traceRankings.value = (data.rankings || []).map((r: any) => ({
+          ...r,
+          winner: prettyName(r.winner),
+          loser: prettyName(r.loser),
+          details: (r.details || []).map((d: string) => prettyName(d))
+        }));
         currentStepIndex.value = steps.length > 0 ? 0 : -1;
 
         // Store values in a global reactive ref for Variables/Types panels
@@ -507,7 +529,7 @@ export const focusNode = async (id: number | string) => {
   }
 };
 
-export type CandidateStatus = 'selected' | 'viable' | 'rejected' | 'unsatisfied';
+export type CandidateStatus = 'selected' | 'viable' | 'rejected' | 'unsatisfied' | 'notViable';
 
 export interface OverloadCandidate {
   id: number;
@@ -515,6 +537,8 @@ export interface OverloadCandidate {
   declLine: number;
   status: CandidateStatus;
   reason?: string;
+  ranking?: OverloadRanking;   // Why it lost, when it was viable but not chosen
+  constraints?: any;           // Constraint tree, for constrained candidates
 }
 
 export interface OverloadCall {
@@ -546,7 +570,8 @@ export const overloadCalls = computed<OverloadCall[]>(() => {
       signature: node.name,
       declLine: node.declLine || 0,
       status: node.failed ? (node.failKind === 'constraints' ? 'unsatisfied' : 'rejected') : 'viable',
-      reason: node.failed ? node.failReason : undefined
+      reason: node.failed ? node.failReason : undefined,
+      constraints: node.constraints
     };
     // Explicit-argument substitution and deduction are two phases of the same candidate
     const list = calls.get(key)!.candidates;
@@ -569,11 +594,24 @@ export const overloadCalls = computed<OverloadCall[]>(() => {
       n.line === call.line && n.col === call.col && splitTemplateName(n.name).base === call.name);
     let winner = chosen ? call.candidates.find(c => c.status === 'viable' && c.declLine === chosen.declLine) : undefined;
     const viable = call.candidates.filter(c => c.status === 'viable');
+    // The ranking data names the winner even when its specialization already existed (reused)
+    if (!winner) {
+      const ranked = traceRankings.value.find(r => r.line === call.line && r.col === call.col);
+      if (ranked) winner = viable.find(c => c.declLine === ranked.winnerDeclLine);
+    }
     // Already-instantiated specializations are not re-instantiated; fall back to the only viable one
     if (!winner && viable.length === 1) winner = viable[0];
     if (winner) {
       winner.status = 'selected';
       call.chosenId = chosen?.id ?? winner.id;
+    }
+    // Attach Clang's ranking explanation to each candidate that was viable but lost
+    for (const cand of call.candidates) {
+      if (cand.status !== 'viable') continue;
+      const ranking = traceRankings.value.find(r => r.line === call.line && r.col === call.col && r.loserDeclLine === cand.declLine);
+      if (!ranking) continue;
+      cand.ranking = ranking;
+      if (ranking.reason === 'notViable') cand.status = 'notViable';
     }
   }
 
@@ -650,12 +688,13 @@ export const templateFamilies = computed<TemplateFamily[]>(() => {
     if (existing) {
       existing.selfUs += selfUs;
     } else {
-      const valueKey = Object.keys(node.values || {})[0];
+      const computed = { ...(node.results || {}), ...(node.values || {}) };
+      const valueKey = Object.keys(computed)[0];
       fam.instances.push({
         id: node.id,
         name: node.name,
         args,
-        value: valueKey ? `${valueKey} = ${node.values[valueKey]}` : undefined,
+        value: valueKey ? `${valueKey} = ${computed[valueKey]}` : undefined,
         selfUs,
         failed: !!node.failed
       });
@@ -698,7 +737,18 @@ export const graphOptions = ref({
   simple: true,       // Hide compiler bookkeeping steps
   hideStd: false,     // Hide templates not declared in the user's file
   showReuse: true,    // Draw "reused from cache" edges
+  collapseChains: true, // Fold recursion (Fib<12> -> Fib<11> -> ...) into one card
 });
+
+// Recursion chains the user expanded (by head node id)
+export const expandedChains = ref<Set<string>>(new Set());
+export const toggleChain = (id: string) => {
+  const next = new Set(expandedChains.value);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  expandedChains.value = next;
+};
+
+const MIN_CHAIN = 3;
 
 export const collapsedIds = ref<Set<string>>(new Set());
 
@@ -708,13 +758,14 @@ export const toggleCollapse = (id: string) => {
   collapsedIds.value = next;
 };
 
-watch(treeData, () => { collapsedIds.value = new Set(); });
+watch(treeData, () => { collapsedIds.value = new Set(); expandedChains.value = new Set(); });
 
 export interface VisibleNode {
   node: any;
   visParentId: string | null; // Nearest visible ancestor
   childCount: number;         // Visible children before collapsing
   hiddenCount: number;        // Visible descendants hidden by collapsing this node
+  chain?: any[];              // Recursion chain folded into this node (head first)
 }
 
 const isFilteredOut = (n: any) => {
@@ -729,24 +780,69 @@ export const visibleGraph = computed(() => {
   const visible = new Map<string, VisibleNode>();
   const redirect = new Map<string, string | null>(); // any node id -> id shown in its place
 
-  const walk = (list: any[], visParent: string | null, hiddenUnder: string | null) => {
+  const baseOf = (n: any) => splitTemplateName(n.name).base;
+  // The same template instantiating itself: a direct child, or one behind a filtered-out step
+  const nextInChain = (n: any, base: string): any | undefined => {
+    for (const c of n.children || []) {
+      if (c.kindName === 'TemplateInstantiation' && !isFilteredOut(c) && baseOf(c) === base) return c;
+    }
+    for (const c of n.children || []) {
+      if (!isFilteredOut(c)) continue;
+      for (const g of c.children || []) {
+        if (g.kindName === 'TemplateInstantiation' && !isFilteredOut(g) && baseOf(g) === base) return g;
+      }
+    }
+    return undefined;
+  };
+
+  const walk = (list: any[], visParent: string | null, hiddenUnder: string | null, parentNode: any = null) => {
     for (const n of list) {
       const id = String(n.id);
       if (hiddenUnder) {
         redirect.set(id, hiddenUnder);
         if (!isFilteredOut(n)) visible.get(hiddenUnder)!.hiddenCount++;
-        walk(n.children || [], visParent, hiddenUnder);
+        walk(n.children || [], visParent, hiddenUnder, n);
         continue;
       }
       if (isFilteredOut(n)) {
         redirect.set(id, visParent);
-        walk(n.children || [], visParent, null);
+        walk(n.children || [], visParent, null, n);
         continue;
       }
-      visible.set(id, { node: n, visParentId: visParent, childCount: 0, hiddenCount: 0 });
+
+      // Fold a recursion chain into its head, unless the user expanded it
+      let chain: any[] | undefined;
+      const isHead = n.kindName === 'TemplateInstantiation' && !(parentNode && baseOf(parentNode) === baseOf(n));
+      if (graphOptions.value.collapseChains && isHead && !expandedChains.value.has(id)) {
+        const members = [n];
+        for (let next = nextInChain(n, baseOf(n)); next; next = nextInChain(next, baseOf(n))) members.push(next);
+        if (members.length >= MIN_CHAIN) chain = members;
+      }
+
+      visible.set(id, { node: n, visParentId: visParent, childCount: 0, hiddenCount: 0, chain });
       redirect.set(id, id);
       if (visParent) visible.get(visParent)!.childCount++;
-      walk(n.children || [], id, collapsedIds.value.has(id) ? id : null);
+      const under = collapsedIds.value.has(id) ? id : null;
+      if (!chain) {
+        walk(n.children || [], id, under, n);
+        continue;
+      }
+      // Everything the chain members caused hangs off the chain card
+      const memberIds = new Set(chain.map(m => String(m.id)));
+      for (const m of chain) {
+        if (m !== n) redirect.set(String(m.id), id);
+        for (const c of m.children || []) {
+          if (memberIds.has(String(c.id))) continue;
+          const leadsToMember = isFilteredOut(c) && (c.children || []).some((g: any) => memberIds.has(String(g.id)));
+          if (!leadsToMember) {
+            walk([c], id, under, m);
+            continue;
+          }
+          // A hidden step between two chain members: fold it in, keep its other children
+          redirect.set(String(c.id), id);
+          walk((c.children || []).filter((g: any) => !memberIds.has(String(g.id))), id, under, c);
+        }
+      }
     }
   };
   walk(treeData.value, null, null);

@@ -6,7 +6,7 @@
 -->
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core';
-import { toggleCollapse } from '../store';
+import { toggleCollapse, toggleChain } from '../store';
 
 export interface MetaNodeData {
   label: string;        // Plain one-line label (used for PNG export and search)
@@ -22,6 +22,7 @@ export interface MetaNodeData {
   childCount: number;
   hiddenCount: number;  // Descendants hidden because this node is collapsed
   collapsed: boolean;
+  chain?: { levels: number; steps: string[] };  // Folded recursion: argument list of each level
 }
 
 const props = defineProps<{ id: string; data: MetaNodeData }>();
@@ -32,6 +33,15 @@ const jumpToLine = (e: MouseEvent) => {
   e.stopPropagation();
   if (props.data.line) window.dispatchEvent(new CustomEvent('editor-highlight', { detail: { line: props.data.line, col: 1 } }));
 };
+
+const onExpandChain = (e: MouseEvent) => {
+  e.stopPropagation();
+  toggleChain(props.id);
+};
+
+/** First two and last two levels, e.g. <12> → <11> → … → <3> → <2> */
+const chainPreview = (steps: string[]) =>
+  steps.length <= 5 ? steps : [...steps.slice(0, 2), '…', ...steps.slice(-2)];
 
 const onToggle = (e: MouseEvent) => {
   e.stopPropagation();
@@ -59,6 +69,18 @@ const onToggle = (e: MouseEvent) => {
     <div v-if="data.args.length" class="flex flex-wrap gap-1 mt-1.5">
       <span v-for="(a, i) in data.args.slice(0, MAX_ARGS)" :key="i" class="arg-chip" :title="a">{{ a }}</span>
       <span v-if="data.args.length > MAX_ARGS" class="arg-chip text-gray-400">+{{ data.args.length - MAX_ARGS }}</span>
+    </div>
+
+    <!-- Folded recursion chain -->
+    <div v-if="data.chain" class="chain-row" :title="data.chain.steps.map(s => '<' + s + '>').join(' → ')">
+      <span class="text-amber-300 shrink-0">↻ {{ data.chain.levels }} levels</span>
+      <span class="truncate text-gray-300">
+        <template v-for="(st, i) in chainPreview(data.chain.steps)" :key="i">
+          <span v-if="i > 0" class="text-gray-600"> → </span>
+          <span>{{ st === '…' ? '…' : '‹' + st + '›' }}</span>
+        </template>
+      </span>
+      <button class="ml-auto shrink-0 text-[10px] text-amber-300 hover:text-white" title="Show every level (double-click the card)" @click="onExpandChain">expand</button>
     </div>
 
     <div v-if="data.result || data.reuse || data.collapsed" class="flex items-center gap-2 mt-1.5 text-[11px]">
@@ -117,6 +139,18 @@ const onToggle = (e: MouseEvent) => {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
   padding: 0 5px;
+}
+.chain-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  min-width: 0;
 }
 .reason {
   margin-top: 6px;

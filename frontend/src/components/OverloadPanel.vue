@@ -5,13 +5,28 @@
   https://opensource.org/licenses/MIT
 -->
 <script setup lang="ts">
+import { ref } from 'vue';
 import { overloadCalls, specializationChoices, focusNode, selectedNodeId } from '../store';
+import ConstraintTree from './ConstraintTree.vue';
+
+const openTrees = ref<Record<number, boolean>>({});
+
+const REASONS: Record<string, string> = {
+  conversion: 'needs a worse conversion',
+  referenceBinding: 'worse reference binding',
+  moreSpecialized: 'less specialized',
+  moreConstrained: 'less constrained',
+  nonTemplate: 'a non-template function won',
+  notViable: 'arguments cannot bind',
+  unknown: 'lost overload resolution'
+};
 
 const STATUS = {
   selected: { icon: '✔', label: 'Selected', cls: 'text-emerald-300 border-emerald-500/60 bg-emerald-950/40' },
   viable: { icon: '○', label: 'Viable, not chosen', cls: 'text-sky-300 border-sky-600/50 bg-sky-950/30' },
   rejected: { icon: '✖', label: 'Rejected (SFINAE)', cls: 'text-red-300 border-red-600/60 bg-red-950/40' },
-  unsatisfied: { icon: '⊘', label: 'Constraints not satisfied', cls: 'text-amber-200 border-amber-600/60 bg-amber-950/30' }
+  unsatisfied: { icon: '⊘', label: 'Constraints not satisfied', cls: 'text-amber-200 border-amber-600/60 bg-amber-950/30' },
+  notViable: { icon: '✖', label: 'Not viable', cls: 'text-orange-200 border-orange-600/50 bg-orange-950/30' }
 } as const;
 
 const jumpToLine = (line: number) => {
@@ -35,7 +50,7 @@ const jumpToLine = (line: number) => {
         </div>
         <div class="text-gray-500">
           {{ call.candidates.length }} candidate{{ call.candidates.length === 1 ? '' : 's' }}
-          · {{ call.candidates.filter(c => c.status === 'rejected' || c.status === 'unsatisfied').length }} discarded
+          · {{ call.candidates.filter(c => c.status === 'rejected' || c.status === 'unsatisfied' || c.status === 'notViable').length }} discarded
         </div>
       </div>
 
@@ -60,6 +75,22 @@ const jumpToLine = (line: number) => {
           </div>
           <div v-if="cand.reason" class="ml-6 mt-1 text-[11px] whitespace-pre-wrap break-words" :class="cand.status === 'unsatisfied' ? 'text-amber-100/80' : 'text-red-200/80'">
             {{ cand.reason }}
+          </div>
+          <!-- Why a viable candidate lost: Clang's ranking rules applied to this call -->
+          <div v-if="cand.ranking" class="ml-6 mt-1 text-[11px] text-sky-100/80">
+            <span class="font-semibold">Lost because it is {{ REASONS[cand.ranking.reason] ?? cand.ranking.reason }}</span>
+            <span class="text-gray-400"> vs {{ cand.ranking.winner }}</span>
+            <ul class="mt-0.5 space-y-0.5 list-disc pl-4 text-gray-300">
+              <li v-for="(d, i) in cand.ranking.details" :key="i" class="break-words">{{ d }}</li>
+            </ul>
+          </div>
+          <div v-if="cand.constraints" class="ml-6 mt-1" @click.stop>
+            <button class="text-[11px] text-cyan-300 hover:underline" @click="openTrees[cand.id] = !openTrees[cand.id]">
+              {{ openTrees[cand.id] ? '▾' : '▸' }} constraint tree
+            </button>
+            <div v-if="openTrees[cand.id]" class="mt-1 rounded bg-gray-950/60 border border-gray-800 p-2">
+              <ConstraintTree :node="cand.constraints" />
+            </div>
           </div>
         </li>
       </ol>

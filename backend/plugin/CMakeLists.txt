@@ -26,7 +26,17 @@ add_definitions(${LLVM_DEFINITIONS})
 include_directories(${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 link_directories(${LLVM_LIBRARY_DIRS})
 
-add_executable(Visualizer Visualizer.cpp)
+add_executable(Visualizer
+    Visualizer.cpp
+    src/ClangHelpers.cpp
+    src/CompileTimeValues.cpp
+    src/Constraints.cpp
+    src/InstantiationTracer.cpp
+    src/OverloadRanking.cpp
+    src/TraceModel.cpp
+    src/TraceWriter.cpp
+)
+target_include_directories(Visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Clang's builtin headers (stddef.h, stdarg.h, intrinsics...) must match the compiler version.
 # The build machine's copy is compiled in as a fallback, and a copy is placed next to the
