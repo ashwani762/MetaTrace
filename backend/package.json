@@ -17,7 +17,9 @@
     "assets": [
       "public/**/*",
       "plugin/Visualizer.exe",
-      "plugin/Visualizer"
+      "plugin/Visualizer",
+      "plugin/clang-resource/**/*",
+      "plugin/lib/**/*"
     ]
   },
   "dependencies": {

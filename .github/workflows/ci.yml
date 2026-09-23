@@ -1,0 +1,180 @@
+# Builds, tests and packages MetaTrace for Windows and Linux.
+#
+# - Every push and pull request: run all tests and build both packages (downloadable as artifacts)
+# - Pushing a tag like v1.2.0: additionally publish both packages as a GitHub Release
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  LLVM_VERSION: 22.1.4
+  LLVM_MAJOR: 22
+  NODE_VERSION: 24
+
+jobs:
+  frontend:
+    name: Frontend (type-check, unit tests, build)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
+
+  linux:
+    name: Linux x64 (tests + package)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Install LLVM ${{ env.LLVM_MAJOR }} (apt.llvm.org)
+        run: |
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_MAJOR"
+          sudo apt-get install -y \
+            "llvm-$LLVM_MAJOR-dev" "libclang-$LLVM_MAJOR-dev" "libclang-cpp$LLVM_MAJOR-dev" \
+            "libpolly-$LLVM_MAJOR-dev" "clang-tools-$LLVM_MAJOR" \
+            ninja-build zlib1g-dev libzstd-dev libedit-dev libcurl4-openssl-dev libxml2-dev
+
+      - name: Build plugin, frontend and packaged binary
+        env:
+          LLVM_PATH: /usr/lib/llvm-${{ env.LLVM_MAJOR }}
+        run: bash build.sh
+
+      - name: Plugin integration tests
+        working-directory: backend
+        run: npx jest
+
+      - name: Smoke test packaged binary
+        run: node scripts/smoke_test.js release/MetaTrace
+
+      - name: Show runtime dependencies
+        run: ldd backend/plugin/Visualizer
+
+      - name: Create archive
+        run: |
+          mkdir -p dist/MetaTrace-linux-x64
+          cp release/MetaTrace README.md LICENSE dist/MetaTrace-linux-x64/
+          tar -C dist -czf MetaTrace-linux-x64.tar.gz MetaTrace-linux-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MetaTrace-linux-x64
+          path: MetaTrace-linux-x64.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 (tests + package)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Cache LLVM archive
+        id: llvm-cache
+        uses: actions/cache@v4
+        with:
+          path: llvm.tar.xz
+          key: llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc
+
+      - name: Download LLVM ${{ env.LLVM_VERSION }}
+        if: steps.llvm-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VERSION/clang+llvm-$env:LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
+          curl.exe -fsSL --retry 3 -o llvm.tar.xz $url
+
+      - name: Extract LLVM
+        shell: pwsh
+        run: |
+          7z x llvm.tar.xz -so | 7z x -si -ttar -oC:\llvm-extract | Out-Null
+          $root = Get-ChildItem C:\llvm-extract | Select-Object -First 1
+          Move-Item $root.FullName C:\llvm
+          Test-Path C:\llvm\lib\cmake\clang\ClangConfig.cmake
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja -y --no-progress
+
+      - name: Build plugin, frontend and packaged binary
+        env:
+          LLVM_PATH: C:/llvm
+        run: node build_release.js
+
+      - name: Plugin integration tests
+        working-directory: backend
+        run: npx jest
+
+      - name: Smoke test packaged binary
+        run: node scripts/smoke_test.js release/MetaTrace.exe
+
+      - name: Create archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/MetaTrace-windows-x64 | Out-Null
+          Copy-Item release/MetaTrace.exe, README.md, LICENSE dist/MetaTrace-windows-x64/
+          Compress-Archive -Path dist/MetaTrace-windows-x64 -DestinationPath MetaTrace-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MetaTrace-windows-x64
+          path: MetaTrace-windows-x64.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [frontend, linux, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/MetaTrace-linux-x64.tar.gz
+            artifacts/MetaTrace-windows-x64.zip
+          generate_release_notes: true

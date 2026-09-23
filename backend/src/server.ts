@@ -102,6 +102,28 @@ if (isPkg) {
     if (needsExtract) {
         console.log(`[INFO] Extracting Visualizer (version ${BUILD_VERSION}) to ${extractPath}...`);
         fsSync.writeFileSync(extractPath, fsSync.readFileSync(VISUALIZER_BIN));
+
+        const copyTree = (src: string, dst: string) => {
+            fsSync.mkdirSync(dst, { recursive: true });
+            for (const name of fsSync.readdirSync(src)) {
+                const from = path.join(src, name);
+                const to = path.join(dst, name);
+                if (fsSync.statSync(from).isDirectory()) copyTree(from, to);
+                else fsSync.writeFileSync(to, fsSync.readFileSync(from));
+            }
+        };
+        // Bundled next to the binary: Clang's builtin headers and (on Linux) shared LLVM libraries
+        for (const dir of ['clang-resource', 'lib']) {
+            const src = path.join(path.dirname(VISUALIZER_BIN), dir);
+            const dst = path.join(pluginCacheDir, dir);
+            if (!fsSync.existsSync(src)) {
+                if (dir === 'clang-resource') console.warn('[WARN] Clang resource headers are not bundled; standard headers may fail to compile.');
+                continue;
+            }
+            fsSync.rmSync(dst, { recursive: true, force: true });
+            copyTree(src, dst);
+        }
+        // Written last so a partially failed extraction is retried on the next start
         fsSync.writeFileSync(versionPath, BUILD_VERSION);
         if (process.platform !== 'win32') {
             fsSync.chmodSync(extractPath, '755');

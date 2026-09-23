@@ -9,7 +9,9 @@ RELEASE_DIR="$DIR/release"
 echo "======================================="
 echo "Checking Linux build dependencies..."
 echo "======================================="
-if ! command -v cmake &> /dev/null || ! dpkg -l | grep -qE "^ii  llvm(-[0-9]+)?-dev" || ! dpkg -l | grep -qE "^ii  libclang(-[0-9]+)?-dev"; then
+if [ -n "$LLVM_PATH" ]; then
+    echo "Using LLVM from LLVM_PATH=$LLVM_PATH"
+elif ! command -v cmake &> /dev/null || ! dpkg -l | grep -qE "^ii  llvm(-[0-9]+)?-dev" || ! dpkg -l | grep -qE "^ii  libclang(-[0-9]+)?-dev"; then
     echo "Missing dependencies. Attempting to install via apt-get..."
     sudo apt-get update
     sudo apt-get install -y cmake llvm-dev libclang-dev build-essential
@@ -26,10 +28,18 @@ echo "======================================="
 cd "$BACKEND_DIR/plugin"
 mkdir -p build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release ${LLVM_PATH:+-DLLVM_PATH="$LLVM_PATH"}
 cmake --build .
 cp Visualizer ../
 cd "$DIR"
+
+echo "Bundling shared LLVM/Clang libraries (if the binary links them dynamically)..."
+rm -rf "$BACKEND_DIR/plugin/lib"
+mkdir -p "$BACKEND_DIR/plugin/lib"
+ldd "$BACKEND_DIR/plugin/Visualizer" | awk '/=> \// {print $3}' | grep -E 'libLLVM|libclang-cpp' | while read -r lib; do
+    echo "  bundling $lib"
+    cp -L "$lib" "$BACKEND_DIR/plugin/lib/"
+done
 
 echo "======================================="
 echo "2. Building Frontend..."

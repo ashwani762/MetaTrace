@@ -53,3 +53,5 @@ backend/src/version.ts
 backend/plugin/Visualizer
 backend/MetaTrace
 backend/plugin/build/
+backend/plugin/clang-resource/
+backend/plugin/lib/

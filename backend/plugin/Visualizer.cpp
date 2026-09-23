@@ -15,9 +15,12 @@
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Sema/TemplateDeduction.h"
 #include "clang/Sema/TemplateInstCallback.h"
+#include "clang/Tooling/ArgumentsAdjusters.h"
 #include "clang/Tooling/Tooling.h"
 #include "clang/Tooling/CommonOptionsParser.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/JSON.h"
 #include <vector>
@@ -28,6 +31,7 @@
 #include <fstream>
 #include "version.h"
 #include <chrono>
+#include <cstdlib>
 
 
 using namespace clang;
@@ -622,5 +626,30 @@ int main(int argc, const char **argv) {
     }
     CommonOptionsParser& OptionsParser = ExpectedParser.get();
     ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+
+    // Clang looks for its builtin headers relative to the executable, which fails once the
+    // binary is packaged and extracted elsewhere. Prefer, in order: an explicit override,
+    // headers shipped next to the binary, then the build machine's LLVM installation.
+    std::vector<std::string> Candidates;
+    if (const char *Env = std::getenv("METATRACE_RESOURCE_DIR")) Candidates.push_back(Env);
+    std::string Exe = llvm::sys::fs::getMainExecutable(argv[0], (void *)&main);
+    if (!Exe.empty()) {
+        llvm::SmallString<256> Shipped(llvm::sys::path::parent_path(Exe));
+        llvm::sys::path::append(Shipped, "clang-resource");
+        Candidates.push_back(std::string(Shipped));
+    }
+#ifdef METATRACE_DEFAULT_RESOURCE_DIR
+    Candidates.push_back(METATRACE_DEFAULT_RESOURCE_DIR);
+#endif
+    for (const std::string &Dir : Candidates) {
+        llvm::SmallString<256> Probe(Dir);
+        llvm::sys::path::append(Probe, "include", "stddef.h");
+        if (llvm::sys::fs::exists(Probe)) {
+            Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(
+                ("-resource-dir=" + Dir).c_str(), ArgumentInsertPosition::END));
+            break;
+        }
+    }
+
     return Tool.run(newFrontendActionFactory<VisualizerAction>().get());
 }

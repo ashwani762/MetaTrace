@@ -658,7 +658,7 @@ watch(
                     source: lane.id,
                     target: r,
                     type: 'smoothstep',
-                    style: { stroke: '#475569', strokeWidth: 1.5, strokeDasharray: '4 4' },
+                    style: { stroke: '#475569', strokeWidth: 1.5, strokeDasharray: '4 4', fill: 'none' },
                     data: { lane: true }
                 });
             }
@@ -677,7 +677,7 @@ watch(
                 label: isDeduction(parent.kindName) ? 'signature deduction' : '',
                 labelBgStyle: { fill: '#1f2937' },
                 labelStyle: { fill: '#9ca3af', fontSize: '10px', fontFamily: 'monospace' },
-                style: { stroke: active ? '#60a5fa' : '#9ca3af', strokeWidth: 2.5 },
+                style: { stroke: active ? '#60a5fa' : '#9ca3af', strokeWidth: 2.5, fill: 'none' },
                 markerEnd: { type: MarkerType.ArrowClosed, color: active ? '#60a5fa' : '#9ca3af' },
                 data: { tree: true }
             });
@@ -702,7 +702,7 @@ watch(
                     label: 'reused',
                     labelBgStyle: { fill: '#1e1b4b' },
                     labelStyle: { fill: '#c4b5fd', fontSize: '10px', fontFamily: 'monospace' },
-                    style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '2 4' },
+                    style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '2 4', fill: 'none' },
                     markerEnd: { type: MarkerType.Arrow, color: '#a78bfa' },
                     data: { reuse: true }
                 });

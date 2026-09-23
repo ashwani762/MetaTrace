@@ -1,96 +1,66 @@
 <div align="center">
   <h1>MetaTrace</h1>
-  <p><strong>A visual, standalone tool to trace and debug C++ Template instantiations using an embedded Clang compiler.</strong></p>
-  <br>
-  <img src="Assets/UI.png" alt="MetaTrace UI Screenshot" width="100%">
+  <p><strong>See what the C++ compiler does with your templates.</strong></p>
+  <p>
+    <a href="https://github.com/ashwani762/MetaTrace/actions/workflows/ci.yml"><img src="https://github.com/ashwani762/MetaTrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+    <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-informational" alt="Windows | Linux">
+    <img src="https://img.shields.io/badge/Clang-22-orange" alt="Clang 22">
+  </p>
+  <img src="Assets/screenshot-4k.png" alt="MetaTrace: code editor, instantiation graph and Inspector explaining a SFINAE rejection" width="100%">
 </div>
 
 ---
 
-## 🔍 Overview
-**MetaTrace** gives you an X-Ray view into the C++ compiler's template instantiation process. If you have ever stared at a multi-page compiler error or wondered why a specific SFINAE template specialization wasn't chosen, MetaTrace is for you.
+MetaTrace compiles your code with an embedded Clang and records **every template instantiation, every overload candidate it tries, and why candidates are thrown away**. It then shows all of this as an interactive graph you can step through like a debugger.
 
-By utilizing a custom-built LLVM Clang plugin hooked up to a rich, hardware-accelerated frontend UI, MetaTrace visualizes the tree of template instantiations, type aliases, and SFINAE failures as a clean, interactive directed graph.
+## Highlights
 
-## ✨ Features
-- **Real-Time Interactive Graph:** Watch templates instantiate and unfold in a node-based interface as you type code.
-- **Embedded Editor:** Features a built-in Monaco (VS Code) editor with full C++ syntax highlighting.
-- **Standalone Desktop App:** Distributed as a single, fully-packaged executable without any external dependencies (like Node or Python). Just run it and it launches in a native window using your system browser.
-- **Integrated LSP:** Includes full clangd-based Language Server Protocol support for auto-complete and hover documentation.
-- **C++ Standard Selection:** Toggle compiler versions on-the-fly from C++98 up to C++26.
-- **SFINAE Debugging:** Failed template substitutions and their precise error reasons are highlighted in red directly on the node graph.
+| | |
+|---|---|
+| **Instantiation graph** | One card per compiler step, grouped under the line of your code that caused it. Results (`value = 55`), cache reuse (♻) and base cases are shown on the card. |
+| **Inspector** | Explains any step in plain English: what happened, *why it is there* (the chain back to your code), which arguments changed, and what it cost. |
+| **Overloads & specializations** | Every candidate for every call: selected, rejected by **SFINAE** or discarded by unmet **concepts**, with Clang's exact reason. It also shows which partial specialization matched. |
+| **Template hotspots** | Templates ranked by compile time, with instantiation counts, cache reuse and recursion depth. |
+| **Time travel** | Scrub or play the compilation step by step (← → ↑ ↓, Space). |
+| **Readable at scale** | Simple view hides compiler bookkeeping, *Hide std internals*, collapsible subtrees, search. Tested on real code using `tuple`, `variant`, ranges and concepts. |
+| **Friendly to newcomers** | A guided tour on first visit and curated examples (recursion, SFINAE, concepts, type lists, CRTP…). |
 
-## 🚀 How to Use
-If you download a pre-built binary release, using MetaTrace is incredibly easy:
-1. Run `MetaTrace`.
-2. Open `http://localhost` in your browser.
-3. Write your C++ templates in the editor on the left.
-4. Watch the template instantiation graph build on the right in real-time. 
+<details>
+<summary><strong>Ultrawide screenshot</strong></summary>
+<br>
+<img src="Assets/screenshot-ultrawide.png" alt="MetaTrace on an ultrawide display" width="100%">
+</details>
 
-## 🛠️ Building from Source
+## Quick start
 
-If you want to build the project from scratch, you will need **Node.js (v18+)** and **Visual Studio (with C++ CMake tools)** installed on your machine.
+1. Download the latest package for **Windows** or **Linux** from [Releases](https://github.com/ashwani762/MetaTrace/releases). CI also attaches packages to every build.
+2. Run `MetaTrace` (or `MetaTrace.exe`) and open **http://localhost** in your browser.
+3. Pick an example from **Examples…**, or write your own templates and click **Build & Trace**.
 
-### 1. Clone the repository
+> You need the C++ standard library headers that are normally installed with a compiler: Visual Studio (MSVC) on Windows, or `g++`/`build-essential` on Linux. Use `--port 8080` if port 80 is taken.
+
+## Build from source
+
 ```bash
-git clone https://github.com/your-username/MetaTrace.git
+git clone https://github.com/ashwani762/MetaTrace.git
 cd MetaTrace
-```
-
-### 2. Install dependencies
-```bash
 npm run install:all
-```
-*This command will install the dependencies for both the frontend UI and the Node.js backend proxy server.*
-
-### 3. Build the LLVM Clang Plugin (Visualizer)
-MetaTrace ships with a custom C++ compiler frontend built against LLVM. 
-
-Because developer environments differ, you must configure CMake and build the plugin yourself before running the full build script.
-Please see the **[Plugin Build Instructions](backend/plugin/README.md)** for details on how to set up your `LLVM_PATH` and compile the plugin.
-
-### 4. Run the Dev Server
-To run the app locally with hot-reloading for the frontend UI, the backend and frontend run on separate ports. You need to tell each side which port to use, if port 80 is busy on your system.
-
-```bash
-# Terminal 1: Start the backend server on port 8001
-cd backend
-PORT=8001 npm run dev
+# Windows (x64 Native Tools prompt)            # Linux
+set LLVM_PATH=C:\path\to\llvm-22               export LLVM_PATH=/usr/lib/llvm-22
+npm run build                                  npm run build
 ```
 
-```bash
-# Terminal 2: Start the Vite frontend dev server
-# BACKEND_PORT must match the PORT used above so the proxy routes correctly
-cd frontend
-BACKEND_PORT=8001 npm run dev
-```
+The packaged binary is written to `release/`. See the **[Developer & User Guide](docs/GUIDE.md)** for LLVM setup, the dev server, tests, CI, and how everything works.
 
-Then open **http://localhost:5173** in your browser.
+## Documentation
 
+- **[Guide](docs/GUIDE.md)**: every panel explained, reading the graph, examples, keyboard shortcuts, architecture, trace format, building, testing and releasing.
 
-### 5. Package into a Standalone Binary
-To compile the frontend, bundle the backend, embed the Clang plugin, and package everything into a single `.exe`:
-```bash
-# From the project root
-npm run build
-```
-The final standalone binary will be located in the `release/` directory.
+## Contributing
 
-## 🤝 Contributing
+Contributions are very welcome. Fork the repo, create a branch, and open a pull request. CI runs every test on Windows and Linux. See [Contributing](docs/GUIDE.md#contributing) for good first areas.
 
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+## License
 
-To start contributing:
-1. **Fork the Project**
-2. **Create your Feature Branch** (`git checkout -b feature/AmazingFeature`)
-3. **Commit your Changes** (`git commit -m 'Add some AmazingFeature'`)
-4. **Push to the Branch** (`git push origin feature/AmazingFeature`)
-5. **Open a Pull Request**
-
-### Areas for Contribution
-- **Graph Layouts:** Improving the Dagre/VueFlow node positioning for massive, deeply nested template metaprograms.
-- **CMake Support:** Expanding the tool to support analyzing templates across multiple files and `CMakeLists.txt` projects instead of just single files.
-- **UI/UX Tweaks:** Improving the dark mode palette, adding minimaps, or extending the hover tooltips.
-
-## 📝 License
-Distributed under the MIT License.
+Distributed under the MIT License. See [LICENSE](LICENSE).

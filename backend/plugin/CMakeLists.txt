@@ -4,12 +4,11 @@ project(Visualizer)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(WIN32)
-    if(NOT DEFINED LLVM_PATH)
-        message(FATAL_ERROR "LLVM_PATH is not defined. Please pass it via -DLLVM_PATH=<path>")
-    endif()
-    find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_PATH}" NO_DEFAULT_PATH)
-    find_package(Clang REQUIRED CONFIG PATHS "${LLVM_PATH}" NO_DEFAULT_PATH)
+if(DEFINED LLVM_PATH)
+    find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_PATH}" "${LLVM_PATH}/lib/cmake/llvm" NO_DEFAULT_PATH)
+    find_package(Clang REQUIRED CONFIG PATHS "${LLVM_PATH}" "${LLVM_PATH}/lib/cmake/clang" NO_DEFAULT_PATH)
+elseif(WIN32)
+    message(FATAL_ERROR "LLVM_PATH is not defined. Please pass it via -DLLVM_PATH=<path>")
 else()
     find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config llvm-config-23 llvm-config-22 llvm-config-21 llvm-config-20 llvm-config-19 llvm-config-18 llvm-config-17)
     if(LLVM_CONFIG_EXECUTABLE)
@@ -29,6 +28,23 @@ link_directories(${LLVM_LIBRARY_DIRS})
 
 add_executable(Visualizer Visualizer.cpp)
 
+# Clang's builtin headers (stddef.h, stdarg.h, intrinsics...) must match the compiler version.
+# The build machine's copy is compiled in as a fallback, and a copy is placed next to the
+# binary (clang-resource/) so packaged releases work on machines without LLVM installed.
+set(CLANG_RESOURCE_DIR "${LLVM_LIBRARY_DIR}/clang/${LLVM_VERSION_MAJOR}")
+if(NOT EXISTS "${CLANG_RESOURCE_DIR}/include/stddef.h")
+    message(WARNING "Clang resource headers not found at ${CLANG_RESOURCE_DIR}")
+endif()
+target_compile_definitions(Visualizer PRIVATE METATRACE_DEFAULT_RESOURCE_DIR="${CLANG_RESOURCE_DIR}")
+
+if(UNIX AND NOT APPLE)
+    # Distro LLVM builds link Clang against a shared libLLVM; packaged releases ship it in ./lib
+    set_target_properties(Visualizer PROPERTIES BUILD_RPATH "\$ORIGIN/lib;${LLVM_LIBRARY_DIR}")
+endif()
+add_custom_command(TARGET Visualizer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CLANG_RESOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/clang-resource/include"
+    COMMENT "Copying Clang resource headers next to the Visualizer")
+
 target_link_libraries(Visualizer PRIVATE
     clangTooling
     clangASTMatchers
@@ -46,7 +62,11 @@ target_link_libraries(Visualizer PRIVATE
 )
 
 if(NOT DEFINED DIA_SDK_PATH)
-    set(DIA_SDK_PATH "C:/Program Files/Microsoft Visual Studio/18/Community/DIA SDK")
+    if(DEFINED ENV{VSINSTALLDIR})
+        file(TO_CMAKE_PATH "$ENV{VSINSTALLDIR}/DIA SDK" DIA_SDK_PATH)
+    else()
+        set(DIA_SDK_PATH "C:/Program Files/Microsoft Visual Studio/18/Community/DIA SDK")
+    endif()
 endif()
 
 # Fix diaguids.lib path in all targets

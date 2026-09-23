@@ -7,7 +7,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-export const PLUGIN_BIN = path.resolve(__dirname, '../../plugin/Visualizer.exe');
+export const PLUGIN_BIN = path.resolve(__dirname, '../../plugin', process.platform === 'win32' ? 'Visualizer.exe' : 'Visualizer');
 export const TEST_TMP_DIR = path.resolve(__dirname, '../tmp');
 
 export function setupTestEnvironment(): string {

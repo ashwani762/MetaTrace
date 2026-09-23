@@ -16,6 +16,10 @@ console.log('\n=======================================');
 console.log('1. Building C++ Visualizer Plugin...');
 console.log('=======================================');
 const pluginDir = path.join(backendDir, 'plugin');
+if (process.env.LLVM_PATH && !fs.existsSync(path.join(pluginDir, 'CMakeCache.txt'))) {
+    console.log(`Configuring CMake with LLVM_PATH=${process.env.LLVM_PATH}`);
+    execSync(`cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_PATH="${process.env.LLVM_PATH}" .`, { cwd: pluginDir, stdio: 'inherit' });
+}
 try {
     // Build Visualizer assuming CMake is already configured by the user
     execSync('cmake --build . --config Release', { cwd: pluginDir, stdio: 'inherit' });
