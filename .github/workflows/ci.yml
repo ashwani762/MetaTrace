@@ -178,3 +178,13 @@ jobs:
             artifacts/MetaTrace-linux-x64.tar.gz
             artifacts/MetaTrace-windows-x64.zip
           generate_release_notes: true
+          # Tags like v1.0.0-beta.1 are published as pre-releases for testing
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## Download
+            - **Windows x64:** `MetaTrace-windows-x64.zip` (unzip and run `MetaTrace.exe`)
+            - **Linux x64:** `MetaTrace-linux-x64.tar.gz` (extract and run `./MetaTrace`)
+
+            Then open http://localhost (use `--port 8080` if port 80 is busy).
+            You need your platform's C++ standard library: Visual Studio C++ tools on Windows, `g++` / `build-essential` on Linux.
+            See the [guide](https://github.com/ashwani762/MetaTrace/blob/main/docs/GUIDE.md) for details.
