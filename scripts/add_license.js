@@ -56,6 +56,8 @@ function prependLicense(dir) {
     }
 }
 
-prependLicense(path.join(__dirname, 'frontend'));
-prependLicense(path.join(__dirname, 'backend'));
-prependLicense(path.join(__dirname, 'plugin')); // if it exists
+// Usage: node scripts/add_license.js (adds the MIT header to any source file missing it)
+const root = path.join(__dirname, '..');
+prependLicense(path.join(root, 'frontend'));
+prependLicense(path.join(root, 'backend'));
+prependLicense(path.join(root, 'scripts'));

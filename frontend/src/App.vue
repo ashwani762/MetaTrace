@@ -13,7 +13,6 @@ import StackPanel from './components/StackPanel.vue';
 import VariablesPanel from './components/VariablesPanel.vue';
 import OutputPanel from './components/OutputPanel.vue';
 import ExplanationPanel from './components/ExplanationPanel.vue';
-import ScrubberPanel from './components/ScrubberPanel.vue';
 import FlamegraphPanel from './components/FlamegraphPanel.vue';
 import TypeResolutionPanel from './components/TypeResolutionPanel.vue';
 import DesugaredCodePanel from './components/DesugaredCodePanel.vue';
@@ -223,7 +222,6 @@ const initLayout = (useSaved: boolean = true) => {
   register('Variables', VariablesPanel);
   register('Output', OutputPanel);
   register('Explanation', ExplanationPanel);
-  register('Scrubber', ScrubberPanel);
   register('Flamegraph', FlamegraphPanel);
   register('TypeResolution', TypeResolutionPanel);
   register('DesugaredCode', DesugaredCodePanel);

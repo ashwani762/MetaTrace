@@ -19,7 +19,8 @@ Thumbs.db
 .env
 .env.*
 
-# Editor directories and files
+# Editor / tool directories and files
+.serena/
 .idea
 .vscode
 *.suo
